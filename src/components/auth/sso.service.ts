@@ -119,20 +119,32 @@ export class SSOService {
       // Map PHP member_type to NestJS SystemRole
       const systemRole = mapMemberType(member_type) as SystemRole;
       
-      // CRITICAL FIX: Only check by user_id - NEVER use email fallback
-      // This prevents conflicts when multiple users share the same email
+      // First try to find by user_id (primary lookup)
       let existingUser = null;
       
       if (user_id) {
-        // ONLY find by user_id - no email fallback
         existingUser = await this.memberModel.findOne({ user_id: user_id });
+      }
+
+      // If not found by user_id, check by email (handles case where user exists with email but different user_id)
+      if (!existingUser && email) {
+        existingUser = await this.memberModel.findOne({ email: email });
+        if (existingUser) {
+          this.logger.log(`⚠️ Found user by email (${email}) but with different user_id (${existingUser.user_id} -> ${user_id}). Updating user_id.`);
+        }
       }
 
       const currentTime = new Date();
 
       if (existingUser) {
-        // ✅ USER EXISTS - UPDATE email and systemRole if different
-        this.logger.log(`🔄 Found existing user in DB for SSO: ${user_id} (${name})`);
+        // ✅ USER EXISTS - UPDATE user_id, email, and systemRole if different
+        this.logger.log(`🔄 Found existing user in DB for SSO: ${existingUser.user_id || 'no user_id'} -> ${user_id} (${name})`);
+        
+        // UPDATE: user_id if it's different or missing
+        if (existingUser.user_id !== user_id) {
+          this.logger.log(`⚠️ User_id changed from ${existingUser.user_id || 'null'} to ${user_id}`);
+          existingUser.user_id = user_id;
+        }
         
         // UPDATE: email if it's different
         if (existingUser.email !== email) {
@@ -146,6 +158,14 @@ export class SSOService {
           this.logger.log(`⚠️ SystemRole changed from ${existingUser.systemRole} to ${systemRole} for user ${user_id}`);
           existingUser.systemRole = systemRole;
         }
+        
+        // Update displayName if different
+        if (existingUser.displayName !== name) {
+          this.logger.log(`⚠️ DisplayName changed from ${existingUser.displayName} to ${name}`);
+          existingUser.displayName = name;
+        }
+        
+        existingUser.lastSeenAt = currentTime;
         
         // updatedAt is automatically managed by Mongoose timestamps
         const updatedUser = await existingUser.save();
