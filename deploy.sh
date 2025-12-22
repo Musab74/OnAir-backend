@@ -1,9 +1,5 @@
 
-#hbjbcebherbvejrkvbjrkje
-#production
-git reset --hard 
-git checkout master
-git pull origin master
+
 
 npm install --legacy-peer-deps
 npm run build
