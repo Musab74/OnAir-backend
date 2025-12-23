@@ -142,85 +142,72 @@ export class RealtimeTranscriptionGateway
                 return; // Don't process or broadcast low-quality transcriptions
               }
 
-              // Get current language (may have been updated)
-              const targetLanguage = this.clientLanguages.get(client.id) || initialLanguage;
-              
               const participantId = user?._id || 'unknown';
               const participantName = user?.displayName || 'Unknown';
-
-              // If source and target are the same, skip translation for speed
               const normalizedSource = detectedLanguage?.toLowerCase() || 'en';
-              const normalizedTarget = targetLanguage?.toLowerCase() || 'en';
+
+              // IMPORTANT: Don't translate here! Pass original text to broadcastSubtitle
+              // broadcastSubtitle will translate to each user's preferred language individually
+              // This ensures Admin gets Korean, Rakhmatillo gets English, etc.
+              const subtitleData = this.transcriptionService.formatSubtitleData(
+                participantId,
+                text, // Original text
+                text, // Use original as placeholder - broadcastSubtitle will translate per user
+                normalizedSource,
+                normalizedSource, // Placeholder - actual target language determined per user in broadcastSubtitle
+                meetingId,
+              );
+
+              // Broadcast via TranscriptionGateway - it will translate to each user's preferred language
+              // Don't await - let it run in background for speed
+              this.transcriptionGateway.broadcastSubtitle(meetingId, {
+                ...subtitleData,
+                participantName,
+              } as any).catch((error) => {
+                this.logger.error(`[RealtimeGateway] Broadcast error: ${error.message}`);
+              });
+
+              // Send to the speaking client with their preferred language for immediate feedback
+              const speakerTargetLanguage = this.clientLanguages.get(client.id) || initialLanguage;
+              const normalizedTarget = speakerTargetLanguage?.toLowerCase() || 'en';
               
-              if (normalizedSource === normalizedTarget) {
-                // Same language - no translation needed, broadcast immediately
-                const subtitleData = this.transcriptionService.formatSubtitleData(
-                  participantId,
-                  text,
-                  text, // Use original as translated
-                  detectedLanguage,
-                  targetLanguage,
-                  meetingId,
-                );
-
-                this.transcriptionGateway.broadcastSubtitle(meetingId, {
-                  ...subtitleData,
-                  participantName,
-                } as any);
-
+              // Only translate for the speaker's own display if needed
+              if (normalizedSource !== normalizedTarget) {
+                this.transcriptionService.translateText(text, normalizedTarget, normalizedSource)
+                  .then((translation) => {
+                    client.emit('FINAL_TRANSCRIPTION', { 
+                      text, 
+                      translatedText: translation.translatedText || text,
+                      language: detectedLanguage,
+                      targetLanguage: normalizedTarget,
+                      participantId,
+                      participantName,
+                    });
+                  })
+                  .catch((error) => {
+                    // Fallback to original text if translation fails
+                    client.emit('FINAL_TRANSCRIPTION', { 
+                      text, 
+                      translatedText: text,
+                      language: detectedLanguage,
+                      targetLanguage: normalizedSource,
+                      participantId,
+                      participantName,
+                    });
+                  });
+              } else {
+                // Same language - no translation needed for speaker
                 client.emit('FINAL_TRANSCRIPTION', { 
                   text, 
                   translatedText: text,
                   language: detectedLanguage,
-                  targetLanguage,
+                  targetLanguage: normalizedSource,
                   participantId,
                   participantName,
                 });
-
-                this.logger.log(`[RealtimeGateway] ✅ Broadcasted (no translation needed): ${text}`);
-                return;
               }
 
-              // Fast translation - optimized model and settings for speed
-              const translation = await this.transcriptionService.translateText(
-                text,
-                targetLanguage,
-                detectedLanguage,
-              );
-
-              // Validate translated text quality
-              if (!this.transcriptionService.validateTranscriptionQuality(translation.translatedText)) {
-                this.logger.warn(`[RealtimeGateway] ⚠️ Rejected low-quality translation: "${translation.translatedText}"`);
-                return;
-              }
-
-              // Format subtitle data
-              const subtitleData = this.transcriptionService.formatSubtitleData(
-                participantId,
-                text,
-                translation.translatedText,
-                detectedLanguage,
-                targetLanguage,
-                meetingId,
-              );
-
-              // Broadcast via TranscriptionGateway
-              this.transcriptionGateway.broadcastSubtitle(meetingId, {
-                ...subtitleData,
-                participantName,
-              } as any);
-
-              // Also send to client
-              client.emit('FINAL_TRANSCRIPTION', { 
-                text, 
-                translatedText: translation.translatedText,
-                language: detectedLanguage,
-                targetLanguage,
-                participantId,
-                participantName,
-              });
-
-              this.logger.log(`[RealtimeGateway] ✅ Broadcasted translation: ${translation.translatedText}`);
+              this.logger.log(`[RealtimeGateway] ✅ Broadcasted original text (translation handled per-user): ${text}`);
             } catch (error: any) {
               this.logger.error(`[RealtimeGateway] Translation error: ${error.message}`);
               // Don't send anything if there's an error - better to show nothing than wrong text

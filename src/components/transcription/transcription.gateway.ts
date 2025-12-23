@@ -334,17 +334,16 @@ export class TranscriptionGateway
       
       // Create a map of language -> translated text for quick lookup
       const translationMap = new Map<string, string>();
+      const languageList = Array.from(languageGroups.keys());
       translationResults.forEach((result, index) => {
+        const targetLang = languageList[index];
         if (result.status === 'fulfilled') {
-          const { language, translatedText } = result.value;
-          translationMap.set(language, translatedText);
+          const { translatedText } = result.value;
+          translationMap.set(targetLang, translatedText);
         } else {
-          // If translation failed, get the language from the original promise
-          // Fallback to original text for this language
-          const languages = Array.from(languageGroups.keys());
-          const failedLang = languages[index];
-          this.logger.warn(`[BROADCAST] Translation failed for ${failedLang}, using original text`);
-          translationMap.set(failedLang, originalText);
+          // If translation failed, use original text to prevent speech loss
+          this.logger.warn(`[BROADCAST] Translation failed for ${targetLang}, using original text`);
+          translationMap.set(targetLang, originalText);
         }
       });
 

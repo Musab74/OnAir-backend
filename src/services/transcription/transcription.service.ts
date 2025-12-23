@@ -238,7 +238,7 @@ export class TranscriptionService {
       const response = await this.axiosInstance.post(
         '/chat/completions',
         {
-          model: 'gpt-3.5-turbo', // Fastest and cheapest model (already using it)
+          model: 'gpt-3.5-turbo', // Fastest and cheapest model for production speed
           messages: [
             {
               role: 'system',
@@ -259,7 +259,7 @@ export class TranscriptionService {
           headers: {
             'Content-Type': 'application/json',
           },
-          timeout: 2000, // 2 second timeout for faster failure handling in production
+          timeout: 1500, // 1.5 second timeout for faster failure handling in production
         },
       );
 
