@@ -56,6 +56,12 @@ export class TranscriptionGateway
   // Store active subtitle subscriptions
   private activeSubscriptions = new Map<string, Set<string>>(); // meetingId -> Set<socketId>
 
+  // Map socketId to userId for quick lookups
+  private socketToUserMap = new Map<string, string>(); // socketId -> userId
+
+  // Map socketId to meetingId for quick lookups
+  private socketToMeetingMap = new Map<string, string>(); // socketId -> meetingId
+
   constructor(
     private transcriptionService: TranscriptionService,
     private jwtService: JwtService,
@@ -94,6 +100,10 @@ export class TranscriptionGateway
       }
 
       client.user = user;
+      // Store socketId to userId mapping
+      if (user._id) {
+        this.socketToUserMap.set(client.id, user._id);
+      }
       this.logger.log(`Client connected: ${client.id} (User: ${user.displayName})`);
     } catch (error: any) {
       this.logger.error(`Connection error: ${error.message}`);
@@ -112,6 +122,10 @@ export class TranscriptionGateway
         this.logger.log(`Removed subscription for meeting: ${meetingId}`);
       }
     });
+
+    // Clean up mappings
+    this.socketToUserMap.delete(client.id);
+    this.socketToMeetingMap.delete(client.id);
   }
 
   /**
@@ -133,19 +147,17 @@ export class TranscriptionGateway
         return;
       }
 
-      // Validate language
-      const supportedLanguages =
-        this.transcriptionService.getSupportedLanguages();
-      const isValidLanguage = supportedLanguages.some(
-        (lang) => lang.code === language,
-      );
-
-      if (!isValidLanguage) {
+      // Validate language - accept any 2-letter language code
+      // OpenAI GPT can translate to/from any language, so we accept any valid language code
+      if (!language || typeof language !== 'string' || language.length < 2) {
         client.emit('ERROR', {
-          message: `Unsupported language: ${language}`,
+          message: 'Invalid language code. Language must be a valid 2-letter code (e.g., en, ko, ja, zh, es, fr, etc.)',
         });
         return;
       }
+      
+      // Normalize language code to lowercase
+      const normalizedLanguage = language.toLowerCase();
 
       // Join the meeting room
       await client.join(meetingId);
@@ -157,9 +169,12 @@ export class TranscriptionGateway
 
       const user = (client as any).user;
       if (user && user._id) {
+        // Store normalized language code
         this.participantPreferences
           .get(meetingId)!
-          .set(user._id, language);
+          .set(user._id, normalizedLanguage);
+        // Store socketId to userId mapping
+        this.socketToUserMap.set(client.id, user._id);
       }
 
       // Track active subscription
@@ -167,15 +182,17 @@ export class TranscriptionGateway
         this.activeSubscriptions.set(meetingId, new Set());
       }
       this.activeSubscriptions.get(meetingId)!.add(client.id);
+      // Store socketId to meetingId mapping
+      this.socketToMeetingMap.set(client.id, meetingId);
 
       this.logger.log(
-        `Client ${client.id} subscribed to subtitles for meeting ${meetingId} with language ${language}`,
+        `Client ${client.id} subscribed to subtitles for meeting ${meetingId} with language ${normalizedLanguage}`,
       );
 
       // Send confirmation
       client.emit('SUBSCRIBE_SUCCESS', {
         meetingId,
-        language,
+        language: normalizedLanguage,
         message: 'Successfully subscribed to subtitles',
       });
     } catch (error: any) {
@@ -233,15 +250,17 @@ export class TranscriptionGateway
   /**
    * Broadcast subtitle to all participants in a meeting
    * This is called internally by the transcription service
+   * Each user receives subtitles in their preferred language
    */
-  broadcastSubtitle(meetingId: string, subtitleData: SubtitleData) {
+  async broadcastSubtitle(meetingId: string, subtitleData: SubtitleData) {
     try {
       // Get all participants subscribed to this meeting
       const subscribers = this.activeSubscriptions.get(meetingId);
 
       this.logger.log(`[BROADCAST] Attempting to broadcast subtitle for meeting ${meetingId}`, {
         subscribersCount: subscribers?.size || 0,
-        subtitleText: subtitleData.translatedText,
+        originalText: subtitleData.originalText,
+        sourceLanguage: subtitleData.sourceLanguage,
         participantId: subtitleData.participantId,
       });
 
@@ -254,25 +273,110 @@ export class TranscriptionGateway
 
       // Get language preferences for this meeting
       const preferences = this.participantPreferences.get(meetingId) || new Map();
+      const originalText = subtitleData.originalText;
+      const sourceLanguage = subtitleData.sourceLanguage || 'en';
 
-      const broadcastData = {
-        meetingId: subtitleData.meetingId,
-        participantId: subtitleData.participantId,
-        participantName: (subtitleData as any).participantName || 'Unknown',
-        originalText: subtitleData.originalText,
-        translatedText: subtitleData.translatedText,
-        sourceLanguage: subtitleData.sourceLanguage,
-        targetLanguage: subtitleData.targetLanguage,
-        timestamp: subtitleData.timestamp,
-      };
+      // Group subscribers by their preferred language to minimize translation API calls
+      const languageGroups = new Map<string, string[]>(); // language -> socketIds[]
+      
+      // Iterate through all subscribed socket IDs
+      for (const socketId of subscribers) {
+        // Get userId from our mapping
+        const userId = this.socketToUserMap.get(socketId);
+        if (userId) {
+          // Get user's preferred language
+          const userLang = preferences.get(userId) || 'en';
+          if (!languageGroups.has(userLang)) {
+            languageGroups.set(userLang, []);
+          }
+          languageGroups.get(userLang)!.push(socketId);
+        } else {
+          // Fallback to English if user mapping not found (shouldn't happen, but handle gracefully)
+          const defaultLang = 'en';
+          if (!languageGroups.has(defaultLang)) {
+            languageGroups.set(defaultLang, []);
+          }
+          languageGroups.get(defaultLang)!.push(socketId);
+          this.logger.warn(`[BROADCAST] No userId mapping found for socket ${socketId}, using default language`);
+        }
+      }
 
-      // Broadcast to all subscribers
-      // Each subscriber will receive subtitles in their preferred language
-      this.server.to(meetingId).emit('SUBTITLE_UPDATE', broadcastData);
+      // Translate to each unique language needed (in parallel for speed)
+      const translationPromises: Array<Promise<{ language: string; translatedText: string }>> = [];
+      
+      for (const [targetLang, socketIds] of languageGroups.entries()) {
+        // If source and target are the same, no translation needed
+        if (sourceLanguage.toLowerCase() === targetLang.toLowerCase()) {
+          translationPromises.push(
+            Promise.resolve({ language: targetLang, translatedText: originalText })
+          );
+        } else {
+          // Translate to target language
+          translationPromises.push(
+            this.transcriptionService
+              .translateText(originalText, targetLang, sourceLanguage)
+              .then((result) => ({
+                language: targetLang,
+                translatedText: result.translatedText || originalText,
+              }))
+              .catch((error) => {
+                this.logger.error(`[BROADCAST] Translation failed for ${targetLang}: ${error.message}`);
+                // Fallback to original text if translation fails
+                return { language: targetLang, translatedText: originalText };
+              })
+          );
+        }
+      }
+
+      // Wait for all translations to complete in parallel
+      // Use allSettled to ensure one failure doesn't stop others
+      const translationResults = await Promise.allSettled(translationPromises);
+      
+      // Create a map of language -> translated text for quick lookup
+      const translationMap = new Map<string, string>();
+      translationResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          const { language, translatedText } = result.value;
+          translationMap.set(language, translatedText);
+        } else {
+          // If translation failed, get the language from the original promise
+          // Fallback to original text for this language
+          const languages = Array.from(languageGroups.keys());
+          const failedLang = languages[index];
+          this.logger.warn(`[BROADCAST] Translation failed for ${failedLang}, using original text`);
+          translationMap.set(failedLang, originalText);
+        }
+      });
+
+      // Send personalized subtitles to each subscriber
+      let sentCount = 0;
+      for (const [targetLang, socketIds] of languageGroups.entries()) {
+        const translatedText = translationMap.get(targetLang) || originalText;
+
+        const broadcastData = {
+          meetingId: subtitleData.meetingId,
+          participantId: subtitleData.participantId,
+          participantName: (subtitleData as any).participantName || 'Unknown',
+          originalText: originalText,
+          translatedText: translatedText,
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLang,
+          timestamp: subtitleData.timestamp,
+        };
+
+        // Send to all sockets that want this language
+        for (const socketId of socketIds) {
+          this.server.to(socketId).emit('SUBTITLE_UPDATE', broadcastData);
+          sentCount++;
+        }
+      }
 
       this.logger.log(
-        `[BROADCAST] Successfully broadcasted subtitle to ${subscribers.size} subscribers in meeting ${meetingId}`,
-        { translatedText: subtitleData.translatedText }
+        `[BROADCAST] Successfully broadcasted personalized subtitles to ${sentCount} subscribers in meeting ${meetingId}`,
+        { 
+          languagesUsed: Array.from(languageGroups.keys()),
+          originalText: originalText.substring(0, 50),
+        }
       );
     } catch (error: any) {
       this.logger.error(`[BROADCAST] Broadcast subtitle error: ${error.message}`, error.stack);

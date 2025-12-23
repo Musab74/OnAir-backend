@@ -133,12 +133,8 @@ export class RealtimeTranscriptionGateway
             try {
               this.logger.log(`[RealtimeGateway] Final result received: ${text} (detected: ${detectedLanguage})`);
               
-              // Only accept English and Korean - reject all other languages
-              const normalizedLang = detectedLanguage?.toLowerCase() || '';
-              if (normalizedLang !== 'en' && normalizedLang !== 'ko') {
-                this.logger.warn(`[RealtimeGateway] ⚠️ Rejected - unsupported language: ${detectedLanguage}`);
-                return; // Don't process or broadcast non-English/Korean speech
-              }
+              // Accept any detected language - OpenAI can translate from any language
+              const normalizedLang = detectedLanguage?.toLowerCase() || 'en';
               
               // Validate transcription quality - reject hallucinations and unclear transcriptions
               if (!this.transcriptionService.validateTranscriptionQuality(text)) {

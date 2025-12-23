@@ -255,10 +255,13 @@ export class TranscriptionController {
         targetLanguage: result.translation.targetLanguage,
       });
 
+      // Broadcast subtitle (now async) - don't wait for it to complete
       this.transcriptionGateway.broadcastSubtitle(meetingId, {
         ...subtitleData,
         participantName,
-      } as any); // Cast to any to include participantName
+      } as any).catch((error) => {
+        this.logger.error(`[CONTROLLER] Broadcast subtitle error: ${error.message}`);
+      });
 
       this.logger.log(
         `[CONTROLLER] Transcription and translation completed for meeting ${meetingId}`,

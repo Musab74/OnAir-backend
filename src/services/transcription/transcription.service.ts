@@ -34,10 +34,26 @@ export class TranscriptionService {
   private readonly openaiBaseUrl = 'https://api.openai.com/v1';
   private readonly axiosInstance: AxiosInstance;
   private readonly chunkSize: number = 10; // seconds
-  // Only support English and Korean
+  // Support all major languages that OpenAI GPT can translate to/from
   private readonly supportedLanguages = [
     { code: 'en', name: 'English' },
     { code: 'ko', name: 'Korean' },
+    { code: 'ja', name: 'Japanese' },
+    { code: 'zh', name: 'Chinese' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'pt', name: 'Portuguese' },
+    { code: 'uz', name: 'Uzbek' },
+    { code: 'ar', name: 'Arabic' },
+    { code: 'hi', name: 'Hindi' },
+    { code: 'it', name: 'Italian' },
+    { code: 'ru', name: 'Russian' },
+    { code: 'vi', name: 'Vietnamese' },
+    { code: 'th', name: 'Thai' },
+    { code: 'nl', name: 'Dutch' },
+    { code: 'pl', name: 'Polish' },
+    { code: 'tr', name: 'Turkish' },
   ];
 
   constructor(private configService: ConfigService) {
@@ -199,18 +215,25 @@ export class TranscriptionService {
         };
       }
 
-      this.logger.log(`Translating text to ${targetLanguage}${sourceLanguage ? ` from ${sourceLanguage}` : ''}`, {
-        textLength: trimmedText.length,
-        textPreview: trimmedText.substring(0, 50),
-      });
+      // Reduced logging for production performance (only log errors and important info)
+      // this.logger.log(`Translating text to ${targetLanguage}${sourceLanguage ? ` from ${sourceLanguage}` : ''}`, {
+      //   textLength: trimmedText.length,
+      //   textPreview: trimmedText.substring(0, 50),
+      // });
 
       // Use OpenAI Chat API for ultra-fast translation
       // Maximum speed optimizations: minimal model, lowest temperature, minimal tokens, shorter timeout
       // For Korean: Use respectful form (존댓말) - always polite
-      const isKorean = targetLanguage.toLowerCase() === 'ko';
-      const systemPrompt = isKorean
-        ? `Translate to Korean using respectful form (존댓말). Use polite endings like -습니다, -세요, -어요, -네요. Always use 존댓말, never 반말. Translation only, no explanations.`
-        : `Translate to ${this.getLanguageName(targetLanguage)}. Translation only.`;
+      const normalizedTargetLang = targetLanguage.toLowerCase();
+      const isKorean = normalizedTargetLang === 'ko';
+      const languageName = this.getLanguageName(targetLanguage) || targetLanguage;
+      
+      let systemPrompt: string;
+      if (isKorean) {
+        systemPrompt = `Translate to Korean using respectful form (존댓말). Use polite endings like -습니다, -세요, -어요, -네요. Always use 존댓말, never 반말. Translation only, no explanations.`;
+      } else {
+        systemPrompt = `Translate the following text to ${languageName}. Provide only the translation, no explanations or additional text.`;
+      }
       
       const response = await this.axiosInstance.post(
         '/chat/completions',
@@ -227,7 +250,7 @@ export class TranscriptionService {
             },
           ],
           temperature: 0, // Zero temperature for fastest, most deterministic responses
-          max_tokens: Math.min(trimmedText.length * 1.5, 300), // Even more aggressive token limit for speed
+          max_tokens: Math.min(Math.ceil(trimmedText.length * 1.2), 250), // Optimized token limit for speed (translation usually shorter than original)
           stream: false,
           n: 1, // Single response
           top_p: 1, // Default for speed
@@ -236,7 +259,7 @@ export class TranscriptionService {
           headers: {
             'Content-Type': 'application/json',
           },
-          timeout: 3088, // 3 second timeout (reduced from 5s) for faster failure handling
+          timeout: 2000, // 2 second timeout for faster failure handling in production
         },
       );
 
@@ -255,13 +278,23 @@ export class TranscriptionService {
         targetLanguage,
       };
 
-      this.logger.log(`Translation completed`);
+      // Reduced logging for production performance
+      // this.logger.log(`Translation completed`);
       return result;
     } catch (error: any) {
-      this.logger.error(`Translation failed: ${error.message}`, error.stack);
-      // Fallback: return original text if translation fails
+      // Log error but don't throw - always return something to prevent speech loss
+      const errorMsg = error.message || 'Unknown error';
+      const isTimeout = errorMsg.includes('timeout') || errorMsg.includes('ETIMEDOUT');
+      
+      if (isTimeout) {
+        this.logger.warn(`[Translation] Timeout for ${targetLanguage} - using original text`);
+      } else {
+        this.logger.error(`[Translation] Failed for ${targetLanguage}: ${errorMsg}`);
+      }
+      
+      // Always return original text if translation fails - never lose speech
       return {
-        translatedText: text,
+        translatedText: text, // Fallback to original to prevent speech loss
         sourceLanguage: sourceLanguage || 'unknown',
         targetLanguage,
       };
@@ -302,48 +335,31 @@ export class TranscriptionService {
         };
       }
 
-      // Only translate if source and target languages are different
+      // Translate if source and target languages are different
       // Normalize language codes (Whisper returns 'en', 'ko', etc.)
       const sourceLang = transcription.language || 'en';
       const normalizedSource = sourceLang.toLowerCase();
       const normalizedTarget = targetLanguage.toLowerCase();
       
-      // Only support English and Korean - reject other languages
-      const supportedLanguages = ['en', 'ko'];
-      // Keep the detected language only if it's English or Korean, otherwise reject
-      const finalSourceLang = supportedLanguages.includes(normalizedSource) ? normalizedSource : null;
-      const finalTargetLang = supportedLanguages.includes(normalizedTarget) ? normalizedTarget : 'en';
+      // Accept any language - OpenAI GPT can translate between any languages
+      // Normalize to lowercase for comparison
+      const finalSourceLang = normalizedSource;
+      const finalTargetLang = normalizedTarget;
       
-      // If source language is not English or Korean, reject the transcription
-      if (!finalSourceLang) {
-        this.logger.warn(`[Translation] Rejected - unsupported source language: ${normalizedSource}`);
-        return {
-          transcription: {
-            text: '',
-            language: normalizedSource,
-            duration: 0,
-          },
-          translation: {
-            translatedText: '',
-            sourceLanguage: normalizedSource,
-            targetLanguage,
-          },
-        };
-      }
-      
-      this.logger.log(`[Translation] Language mapping:`, {
-        detected: sourceLang,
-        normalizedSource,
-        finalSourceLang,
-        targetLanguage,
-        normalizedTarget,
-        finalTargetLang,
-        willTranslate: finalSourceLang !== finalTargetLang,
-      });
+      // Reduced logging for production performance
+      // this.logger.log(`[Translation] Language mapping:`, {
+      //   detected: sourceLang,
+      //   normalizedSource,
+      //   finalSourceLang,
+      //   targetLanguage,
+      //   normalizedTarget,
+      //   finalTargetLang,
+      //   willTranslate: finalSourceLang !== finalTargetLang,
+      // });
       
       if (finalSourceLang === finalTargetLang) {
         // Same language - no translation needed
-        this.logger.debug(`Skipping translation - same language: ${finalSourceLang}`);
+        // this.logger.debug(`Skipping translation - same language: ${finalSourceLang}`);
         return {
           transcription: {
             ...transcription,
@@ -357,7 +373,7 @@ export class TranscriptionService {
         };
       }
 
-      // Then, translate the transcribed text (only if different language)
+      // Translate the transcribed text to target language (OpenAI GPT supports any language pair)
       const translation = await this.translateText(
         trimmedText,
         finalTargetLang,
@@ -425,8 +441,34 @@ export class TranscriptionService {
    * @returns Language name
    */
   private getLanguageName(code: string): string {
-    const lang = this.supportedLanguages.find((l) => l.code === code);
-    return lang ? lang.name : code;
+    const normalizedCode = code.toLowerCase();
+    const lang = this.supportedLanguages.find((l) => l.code.toLowerCase() === normalizedCode);
+    if (lang) return lang.name;
+    
+    // If not in our list, return a human-readable version of the code
+    // Common language code mappings for better translation prompts
+    const languageNames: Record<string, string> = {
+      'en': 'English',
+      'ko': 'Korean',
+      'ja': 'Japanese',
+      'zh': 'Chinese',
+      'es': 'Spanish',
+      'fr': 'French',
+      'de': 'German',
+      'pt': 'Portuguese',
+      'uz': 'Uzbek',
+      'ar': 'Arabic',
+      'hi': 'Hindi',
+      'it': 'Italian',
+      'ru': 'Russian',
+      'vi': 'Vietnamese',
+      'th': 'Thai',
+      'nl': 'Dutch',
+      'pl': 'Polish',
+      'tr': 'Turkish',
+    };
+    
+    return languageNames[normalizedCode] || normalizedCode.toUpperCase();
   }
 
   /**
