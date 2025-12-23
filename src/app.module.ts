@@ -13,6 +13,7 @@ import { HealthModule } from './components/health/health.module';
 import { RecordingModule } from './components/recording/recording.module';
 import { RecordingUploadController } from './components/recording/recording-upload.controller';
 import { SocketModule } from './socket/socket.module';
+import { TranscriptionModule } from './components/transcription/transcription.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
@@ -53,6 +54,7 @@ const meetingStartEmitter = new EventEmitter();
     HealthModule,
     RecordingModule,
     SocketModule,
+    TranscriptionModule,
     MongooseModule.forFeature([
       { name: Member.name, schema: MemberSchema },
       { name: Meeting.name, schema: MeetingSchema },

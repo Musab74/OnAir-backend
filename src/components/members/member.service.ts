@@ -30,8 +30,11 @@ export class MemberService {
   async signup(memberInput: MemberInput) {
     const { email, password, displayName, department, phone } = memberInput;
 
+    // Normalize email (lowercase and trim) to match schema
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Check if user already exists
-    const existingUser = await this.memberModel.findOne({ email });
+    const existingUser = await this.memberModel.findOne({ email: normalizedEmail });
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
@@ -41,7 +44,7 @@ export class MemberService {
 
     // Create new user as MEMBER
     const newUser = new this.memberModel({
-      email,
+      email: normalizedEmail,
       passwordHash,
       displayName,
       department,
@@ -69,8 +72,11 @@ export class MemberService {
   async tutorSignup(memberInput: MemberInput) {
     const { email, password, displayName, department, phone } = memberInput;
 
+    // Normalize email (lowercase and trim) to match schema
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Check if user already exists
-    const existingUser = await this.memberModel.findOne({ email });
+    const existingUser = await this.memberModel.findOne({ email: normalizedEmail });
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
@@ -80,7 +86,7 @@ export class MemberService {
 
     // Create new user as TUTOR
     const newUser = new this.memberModel({
-      email,
+      email: normalizedEmail,
       passwordHash,
       displayName,
       department,
@@ -108,10 +114,18 @@ export class MemberService {
   async login(loginInput: { email: string; password: string }) {
     const { email, password } = loginInput;
 
+    // Normalize email (lowercase and trim) to match schema
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Find user by email
-    const user = await this.memberModel.findOne({ email });
+    const user = await this.memberModel.findOne({ email: normalizedEmail });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Check if user has a password hash (SSO users might not have one)
+    if (!user.passwordHash || user.passwordHash.trim() === '') {
+      throw new UnauthorizedException('Invalid credentials. This account may have been created via SSO. Please use SSO login.');
     }
 
     // Verify password
@@ -143,8 +157,11 @@ export class MemberService {
   async tutorLogin(loginInput: { email: string; password: string }) {
     const { email, password } = loginInput;
 
+    // Normalize email (lowercase and trim) to match schema
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Find user by email
-    const user = await this.memberModel.findOne({ email });
+    const user = await this.memberModel.findOne({ email: normalizedEmail });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -155,6 +172,11 @@ export class MemberService {
       user.systemRole !== SystemRole.ADMIN
     ) {
       throw new UnauthorizedException('Access denied. Tutor role required.');
+    }
+
+    // Check if user has a password hash (SSO users might not have one)
+    if (!user.passwordHash || user.passwordHash.trim() === '') {
+      throw new UnauthorizedException('Invalid credentials. This account may have been created via SSO. Please use SSO login.');
     }
 
     // Verify password
@@ -187,8 +209,11 @@ export class MemberService {
   async adminLogin(loginInput: { email: string; password: string }) {
     const { email, password } = loginInput;
 
+    // Normalize email (lowercase and trim) to match schema
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Find user by email
-    const user = await this.memberModel.findOne({ email });
+    const user = await this.memberModel.findOne({ email: normalizedEmail });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -196,6 +221,11 @@ export class MemberService {
     // Check if user is ADMIN
     if (user.systemRole !== SystemRole.ADMIN) {
       throw new UnauthorizedException('Access denied. Admin role required.');
+    }
+
+    // Check if user has a password hash (SSO users might not have one)
+    if (!user.passwordHash || user.passwordHash.trim() === '') {
+      throw new UnauthorizedException('Invalid credentials. This account may have been created via SSO. Please use SSO login.');
     }
 
     // Verify password
