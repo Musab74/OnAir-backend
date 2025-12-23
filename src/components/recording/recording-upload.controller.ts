@@ -274,7 +274,7 @@ export class RecordingUploadController {
           ...formData.getHeaders(),
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 300000, // 5 minutes timeout
+        timeout: 308800, // 5 minutes timeout
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
       });

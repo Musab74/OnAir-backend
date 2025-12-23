@@ -13,7 +13,7 @@ JWT_SECRET=2d99971c43e590501f81c5760eacc4cc351e590072791006a9ee3dbc064c62cf8949f
 JWT_SECRET_KEY=2d99971c43e590501f81c5760eacc4cc351e590072791006a9ee3dbc064c62cf8949f2a9978f5605d1f3136f94b90356065b509a7d478e6b554a119671cfce4a
 
 # Server Configuration
-PORT=3007
+PORT=3777
 NODE_ENV=development
 
 # LiveKit Configuration
@@ -32,7 +32,7 @@ LIVEKIT2_URL=https://livekit2.hrdeedu.co.kr
 # ⚠️ IMPORTANT: These domains must match your actual deployment URLs
 PHP_WEBSITE_URL=https://livekit1.hrdeedu.com
 NESTJS_FRONTEND_URL=https://live.hrdeedu.co.kr
-CORS_ORIGIN=http://localhost:3000,http://localhost:3001
+CORS_ORIGIN=http://localhost:3088,http://localhost:3001
 
 # File Upload Configuration
 MAX_FILE_SIZE=50000000

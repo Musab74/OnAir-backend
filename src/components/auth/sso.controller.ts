@@ -34,7 +34,7 @@ export class SSOController {
    * 
    * @example Request
    * ```bash
-   * curl -X POST http://localhost:3000/auth/sso-login \
+   * curl -X POST http://localhost:3088/auth/sso-login \
    *   -H "Content-Type: application/json" \
    *   -d '{"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}'
    * ```
@@ -112,7 +112,7 @@ export class SSOController {
    * 
    * @example Request
    * ```bash
-   * curl "http://localhost:3000/auth/sso-login?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+   * curl "http://localhost:3088/auth/sso-login?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
    * ```
    */
   @Get('sso-login')

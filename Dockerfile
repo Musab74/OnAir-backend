@@ -41,11 +41,11 @@ RUN chown -R nestjs:nodejs /app
 USER nestjs
 
 # Expose port
-EXPOSE 3007
+EXPOSE 3777
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3007/graphql || exit 1
+  CMD curl -f http://localhost:3777/graphql || exit 1
 
 # Start the application
 CMD ["node", "dist/main.js"]

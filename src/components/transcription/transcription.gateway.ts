@@ -32,7 +32,7 @@ interface AuthenticatedSocket extends Socket {
     origin: [
       'https://live.hrdeedu.co.kr',
       'https://api.hrdeedu.co.kr',
-      'http://localhost:3000',
+      'http://localhost:3088',
       'http://localhost:3001',
     ],
     credentials: true,

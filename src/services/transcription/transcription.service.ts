@@ -55,7 +55,7 @@ export class TranscriptionService {
         'Authorization': `Bearer ${this.openaiApiKey}`,
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 30000, // 30 seconds timeout
+      timeout: 30880, // 30 seconds timeout
     });
 
     this.logger.log('TranscriptionService initialized');
@@ -236,7 +236,7 @@ export class TranscriptionService {
           headers: {
             'Content-Type': 'application/json',
           },
-          timeout: 3000, // 3 second timeout (reduced from 5s) for faster failure handling
+          timeout: 3088, // 3 second timeout (reduced from 5s) for faster failure handling
         },
       );
 

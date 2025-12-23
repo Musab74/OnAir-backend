@@ -8,7 +8,7 @@ rtc:
   # CORS configuration for LiveKit server
   cors:
     origins:
-      - "http://localhost:3000"
+      - "http://localhost:3088"
       - "http://localhost:3001"
       - "https://live.hrdeedu.co.kr"
       - "https://api.hrdeedu.co.kr"

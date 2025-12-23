@@ -32,7 +32,7 @@ interface AuthenticatedSocket extends Socket {
     origin: [
       'https://live.hrdeedu.co.kr',
       'https://api.hrdeedu.co.kr',
-      'http://localhost:3000',
+      'http://localhost:3088',
       'http://localhost:3001'
     ],
     credentials: true,
@@ -1350,7 +1350,7 @@ export class SignalingGateway
       // Update database every 3rd heartbeat (30 seconds) to prevent cleanup conflicts
       const now = Date.now();
       const lastUpdate = this.lastHeartbeatUpdate.get(client.user._id) || 0;
-      const shouldUpdateDB = (now - lastUpdate) > 30000; // Update DB every 30 seconds (3 heartbeats at 10s intervals)
+      const shouldUpdateDB = (now - lastUpdate) > 30880; // Update DB every 30 seconds (3 heartbeats at 10s intervals)
 
       let dbUpdateSuccess = false;
       
