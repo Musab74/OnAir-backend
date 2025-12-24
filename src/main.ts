@@ -26,12 +26,14 @@ async function bootstrap() {
     'http://localhost:3001', // Alternative dev frontend
     'http://localhost:3007', // Backend port
     'http://localhost:4001', // Development backend
+    'http://localhost:4002', // Additional backend port
     'http://localhost:3077', // New frontend development port
     'http://127.0.0.1:3088', // Alternative localhost
     'http://127.0.0.1:3000', // Frontend localhost
     'http://127.0.0.1:3001', // Alternative localhost
     'http://127.0.0.1:3007', // Backend localhost
     'http://127.0.0.1:4001', // Alternative localhost
+    'http://127.0.0.1:4002', // Additional backend port
     'http://127.0.0.1:3077', // New frontend localhost port
     'https://liveee.hrdeedu.co.kr', // New frontend domain
     'https://live.hrdeedu.co.kr', // Original frontend domain

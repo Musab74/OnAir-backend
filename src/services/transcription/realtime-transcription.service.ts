@@ -18,9 +18,9 @@ export interface RealtimeConfig {
 export class RealtimeTranscriptionService {
   private readonly logger = new Logger(RealtimeTranscriptionService.name);
   private readonly openaiApiKey: string;
-  // OpenAI Realtime API URL - upgraded to latest gpt-4o realtime model
+  // OpenAI Realtime API URL - use stable preview model
   private readonly openaiRealtimeUrl =
-    'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-latest';
+    'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
 
   constructor(private configService: ConfigService) {
     this.openaiApiKey = this.configService.get<string>('OPENAI_API_KEY');
