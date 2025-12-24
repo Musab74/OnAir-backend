@@ -21,15 +21,15 @@ export class SSOLoginInput {
  * Updated to match actual PHP JWT structure
  */
 export interface PHPJwtPayload {
-  user_id: string;        // PHP user ID (primary identifier)
-  name: string;           // PHP user display name
-  email: string;          // PHP email (may be encrypted)
-  member_type?: string;   // PHP member type (A, T, M, S) - optional for backward compatibility
-  role?: string;          // PHP role (admin, tutor, member, staff) - new format
-  dept?: string;          // PHP department code (A, T, M, S) - can be used as member_type fallback
-  platform?: string;      // PHP platform identifier (optional)
-  iat: number;            // issued at (Unix timestamp)
-  exp: number;            // expiration (Unix timestamp)
+  user_id: string; // PHP user ID (primary identifier)
+  name: string; // PHP user display name
+  email: string; // PHP email (may be encrypted)
+  member_type?: string; // PHP member type (A, T, M, S) - optional for backward compatibility
+  role?: string; // PHP role (admin, tutor, member, staff) - new format
+  dept?: string; // PHP department code (A, T, M, S) - can be used as member_type fallback
+  platform?: string; // PHP platform identifier (optional)
+  iat: number; // issued at (Unix timestamp)
+  exp: number; // expiration (Unix timestamp)
   // Additional optional fields from PHP JWT
   dept_name?: string;
   team?: string;
@@ -46,25 +46,31 @@ export const extractMemberType = (payload: PHPJwtPayload): string => {
   if (payload.member_type) {
     return payload.member_type;
   }
-  
+
   // Priority 2: Use dept if present (new format - dept: 'A' means admin)
   if (payload.dept) {
     return payload.dept;
   }
-  
+
   // Priority 3: Map role to member_type (new format)
   if (payload.role) {
     const roleLower = payload.role.toLowerCase();
     switch (roleLower) {
-      case 'admin': return 'A';
-      case 'tutor': return 'T';
-      case 'member': return 'M';
-      case 'staff': return 'A'; // Staff as admin
-      case 'student': return 'M'; // Students as members
-      default: return 'M';
+      case 'admin':
+        return 'A';
+      case 'tutor':
+        return 'T';
+      case 'member':
+        return 'M';
+      case 'staff':
+        return 'A'; // Staff as admin
+      case 'student':
+        return 'M'; // Students as members
+      default:
+        return 'M';
     }
   }
-  
+
   // Default fallback
   return 'M';
 };
@@ -74,11 +80,16 @@ export const extractMemberType = (payload: PHPJwtPayload): string => {
  */
 export const mapMemberType = (memberType: string): string => {
   switch (memberType) {
-    case 'A': return 'ADMIN';
-    case 'T': return 'TUTOR';
-    case 'M': return 'MEMBER';
-    case 'S': return 'MEMBER'; // Students as members
-    default: return 'MEMBER';
+    case 'A':
+      return 'ADMIN';
+    case 'T':
+      return 'TUTOR';
+    case 'M':
+      return 'MEMBER';
+    case 'S':
+      return 'MEMBER'; // Students as members
+    default:
+      return 'MEMBER';
   }
 };
 
@@ -102,7 +113,8 @@ export class SSOLoginResult {
   success!: boolean;
 
   @Field(() => Boolean, {
-    description: 'Whether the user existed before (true) or was newly created (false)',
+    description:
+      'Whether the user existed before (true) or was newly created (false)',
   })
   existed!: boolean;
 
@@ -133,4 +145,3 @@ export interface SSOLoginResponse {
   message: string;
   redirectUrl?: string; // Dashboard URL based on user role
 }
-

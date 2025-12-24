@@ -13,11 +13,11 @@ export class MeetingUtils {
    */
   static isMeetingHost(meetingHostId: any, userId: any): boolean {
     if (!meetingHostId || !userId) return false;
-    
+
     // Convert both to strings for comparison
     let hostIdString: string;
     let userIdString: string;
-    
+
     // Extract hostId string
     if (typeof meetingHostId === 'object' && '_id' in meetingHostId) {
       // Populated hostId object
@@ -26,7 +26,7 @@ export class MeetingUtils {
       // Direct ObjectId or string
       hostIdString = meetingHostId.toString();
     }
-    
+
     // Extract userId string
     if (typeof userId === 'object' && 'toString' in userId) {
       // ObjectId or similar object
@@ -35,7 +35,7 @@ export class MeetingUtils {
       // String
       userIdString = String(userId);
     }
-    
+
     return hostIdString === userIdString;
   }
 
@@ -46,7 +46,7 @@ export class MeetingUtils {
    */
   static extractHostIdString(meetingHostId: any): string | null {
     if (!meetingHostId) return null;
-    
+
     if (typeof meetingHostId === 'object' && '_id' in meetingHostId) {
       // Populated hostId object
       return meetingHostId._id.toString();
@@ -65,14 +65,15 @@ export class MeetingUtils {
    */
   static isCurrentMeetingHost(meeting: any, userId: any): boolean {
     if (!meeting || !userId) return false;
-    
+
     // Check if user is the original tutor (hostId)
     const isOriginalHost = this.isMeetingHost(meeting.hostId, userId);
-    
+
     // Check if user is the current host (currentHostId)
-    const isCurrentHost = meeting.currentHostId ? 
-      this.isMeetingHost(meeting.currentHostId, userId) : false;
-    
+    const isCurrentHost = meeting.currentHostId
+      ? this.isMeetingHost(meeting.currentHostId, userId)
+      : false;
+
     // User is a host if they are either the original tutor OR the current host
     return isOriginalHost || isCurrentHost;
   }

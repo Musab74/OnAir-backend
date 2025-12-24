@@ -19,11 +19,12 @@ export class RealtimeTranscriptionService {
   private readonly logger = new Logger(RealtimeTranscriptionService.name);
   private readonly openaiApiKey: string;
   // OpenAI Realtime API URL - uses gpt-4o-realtime-preview model
-  private readonly openaiRealtimeUrl = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
+  private readonly openaiRealtimeUrl =
+    'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
 
   constructor(private configService: ConfigService) {
     this.openaiApiKey = this.configService.get<string>('OPENAI_API_KEY');
-    
+
     if (!this.openaiApiKey) {
       this.logger.error('OPENAI_API_KEY is not set in environment variables');
       throw new Error('OPENAI_API_KEY is required');
@@ -35,31 +36,36 @@ export class RealtimeTranscriptionService {
    * Returns the proxy WebSocket that can be used to forward messages
    */
   createProxyConnection(config: RealtimeConfig): WebSocket {
-    this.logger.log(`[RealtimeAPI] Creating connection to: ${this.openaiRealtimeUrl}`);
+    this.logger.log(
+      `[RealtimeAPI] Creating connection to: ${this.openaiRealtimeUrl}`,
+    );
     this.logger.log(`[RealtimeAPI] API Key present: ${!!this.openaiApiKey}`);
-    
+
     try {
       const ws = new WebSocket(this.openaiRealtimeUrl, {
         headers: {
-          'Authorization': `Bearer ${this.openaiApiKey}`,
+          Authorization: `Bearer ${this.openaiApiKey}`,
           'OpenAI-Beta': 'realtime=v1',
         },
       });
 
       ws.on('open', () => {
         this.logger.log('[RealtimeAPI] ✅ Connected to OpenAI Realtime API');
-        
+
         // Send session configuration
         const sessionConfig: any = {
           type: 'session.update',
           session: {
             modalities: ['audio', 'text'], // Must include both audio and text
-            instructions: 'You are a real-time transcription assistant. Transcribe speech accurately.',
+            instructions:
+              'You are a real-time transcription assistant. Transcribe speech accurately.',
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: {
               model: 'whisper-1',
               ...(config.language && { language: config.language }),
+              // OpenAI Realtime API may automatically chunk very long audio streams
+              // but we don't have direct control over this in the session config
             },
             turn_detection: {
               type: 'server_vad',
@@ -69,8 +75,11 @@ export class RealtimeTranscriptionService {
             },
           },
         };
-        
-        this.logger.log('[RealtimeAPI] Sending session config:', JSON.stringify(sessionConfig, null, 2));
+
+        this.logger.log(
+          '[RealtimeAPI] Sending session config:',
+          JSON.stringify(sessionConfig, null, 2),
+        );
         ws.send(JSON.stringify(sessionConfig));
       });
 
@@ -92,27 +101,46 @@ export class RealtimeTranscriptionService {
           address: error.address,
           port: error.port,
         });
-        config.onError?.(new Error(`Realtime API connection error: ${error.message || 'Unknown error'}`));
+        config.onError?.(
+          new Error(
+            `Realtime API connection error: ${error.message || 'Unknown error'}`,
+          ),
+        );
       });
 
       ws.on('close', (code: number, reason: Buffer) => {
-        this.logger.log(`[RealtimeAPI] WebSocket closed: code=${code}, reason=${reason.toString()}`);
+        this.logger.log(
+          `[RealtimeAPI] WebSocket closed: code=${code}, reason=${reason.toString()}`,
+        );
         // Code 1005 means "No Status Received" - can happen with partial session updates
         // Code 1000 is normal closure
         // Don't treat 1005 as fatal - it might be due to an unsupported session update
         if (code !== 1000 && code !== 1005) {
-          config.onError?.(new Error(`WebSocket closed unexpectedly: ${reason.toString() || `code ${code}`}`));
+          config.onError?.(
+            new Error(
+              `WebSocket closed unexpectedly: ${reason.toString() || `code ${code}`}`,
+            ),
+          );
         } else if (code === 1005) {
-          this.logger.warn(`[RealtimeAPI] WebSocket closed with code 1005 (no status) - may be due to unsupported session update`);
+          this.logger.warn(
+            `[RealtimeAPI] WebSocket closed with code 1005 (no status) - may be due to unsupported session update`,
+          );
         }
       });
 
       // Set a timeout to detect connection failures
       const connectionTimeout = setTimeout(() => {
-        if (ws.readyState === 0) { // CONNECTING = 0
-          this.logger.error('[RealtimeAPI] Connection timeout - WebSocket took too long to connect');
+        if (ws.readyState === 0) {
+          // CONNECTING = 0
+          this.logger.error(
+            '[RealtimeAPI] Connection timeout - WebSocket took too long to connect',
+          );
           ws.close();
-          config.onError?.(new Error('Connection timeout - OpenAI Realtime API did not respond'));
+          config.onError?.(
+            new Error(
+              'Connection timeout - OpenAI Realtime API did not respond',
+            ),
+          );
         }
       }, 10000); // 10 second timeout
 
@@ -126,7 +154,9 @@ export class RealtimeTranscriptionService {
         message: error.message,
         stack: error.stack,
       });
-      config.onError?.(new Error(`Failed to create WebSocket: ${error.message}`));
+      config.onError?.(
+        new Error(`Failed to create WebSocket: ${error.message}`),
+      );
       throw error; // Re-throw so gateway can catch it
     }
   }
@@ -136,7 +166,7 @@ export class RealtimeTranscriptionService {
    */
   private handleRealtimeMessage(data: any, config: RealtimeConfig): void {
     this.logger.debug(`[RealtimeAPI] Received message type: ${data.type}`);
-    
+
     switch (data.type) {
       case 'transcription.delta':
         // Partial transcription result (legacy format)
@@ -149,10 +179,14 @@ export class RealtimeTranscriptionService {
       case 'transcription.done':
         // Final transcription result (legacy format)
         if (data.text) {
-          this.logger.log(`[RealtimeAPI] Final: ${data.text} (${data.language || 'en'})`);
+          this.logger.log(
+            `[RealtimeAPI] Final: ${data.text} (${data.language || 'en'})`,
+          );
           config.onFinalResult?.(data.text, data.language || 'en');
         } else {
-          this.logger.warn('[RealtimeAPI] transcription.done received but no text');
+          this.logger.warn(
+            '[RealtimeAPI] transcription.done received but no text',
+          );
         }
         break;
 
@@ -160,10 +194,15 @@ export class RealtimeTranscriptionService {
         // Partial transcription result (new format)
         // The delta text is in data.delta
         if (data.delta) {
-          this.logger.debug(`[RealtimeAPI] 📝 Partial transcription delta: ${data.delta}`);
+          this.logger.debug(
+            `[RealtimeAPI] 📝 Partial transcription delta: ${data.delta}`,
+          );
           config.onPartialResult?.(data.delta);
         } else {
-          this.logger.debug(`[RealtimeAPI] Delta message but no delta field. Full data:`, JSON.stringify(data, null, 2));
+          this.logger.debug(
+            `[RealtimeAPI] Delta message but no delta field. Full data:`,
+            JSON.stringify(data, null, 2),
+          );
         }
         break;
 
@@ -171,11 +210,14 @@ export class RealtimeTranscriptionService {
         // Final transcription result (new format)
         // The transcript might be in data.item.input_audio_transcription.transcript
         // or data.transcript or data.text
-        this.logger.debug(`[RealtimeAPI] Transcription completed. Full message:`, JSON.stringify(data, null, 2));
-        
+        this.logger.debug(
+          `[RealtimeAPI] Transcription completed. Full message:`,
+          JSON.stringify(data, null, 2),
+        );
+
         let transcript: string | null = null;
         let language = 'en';
-        
+
         // Try different possible locations for the transcript
         if (data.item?.input_audio_transcription?.transcript) {
           transcript = data.item.input_audio_transcription.transcript;
@@ -190,25 +232,36 @@ export class RealtimeTranscriptionService {
           transcript = data.item.input_audio_transcription.text;
           language = data.item.input_audio_transcription.language || language;
         }
-        
+
         // Only process English and Korean - reject all other languages immediately
         const normalizedLang = language?.toLowerCase() || '';
         if (normalizedLang !== 'en' && normalizedLang !== 'ko') {
-          this.logger.warn(`[RealtimeAPI] ⚠️ Rejected - unsupported language: ${language} for transcript: "${transcript}"`);
+          this.logger.warn(
+            `[RealtimeAPI] ⚠️ Rejected - unsupported language: ${language} for transcript: "${transcript}"`,
+          );
           return; // Don't process non-English/Korean transcriptions
         }
-        
+
         if (transcript) {
-          this.logger.log(`[RealtimeAPI] ✅ Final transcription completed: "${transcript}" (${language})`);
+          this.logger.log(
+            `[RealtimeAPI] ✅ Final transcription completed: "${transcript}" (${language})`,
+          );
           config.onFinalResult?.(transcript, language);
         } else {
-          this.logger.warn('[RealtimeAPI] ⚠️ Transcription completed but could not extract transcript from message');
+          this.logger.warn(
+            '[RealtimeAPI] ⚠️ Transcription completed but could not extract transcript from message',
+          );
         }
         break;
 
       case 'error':
-        this.logger.error('[RealtimeAPI] Error:', JSON.stringify(data.error || data));
-        config.onError?.(new Error(data.error?.message || data.message || 'Unknown error'));
+        this.logger.error(
+          '[RealtimeAPI] Error:',
+          JSON.stringify(data.error || data),
+        );
+        config.onError?.(
+          new Error(data.error?.message || data.message || 'Unknown error'),
+        );
         break;
 
       case 'session.created':
@@ -234,16 +287,20 @@ export class RealtimeTranscriptionService {
 
       default:
         // Log unknown message types for debugging (but ignore internal response messages)
-        if (data.type && 
-            !data.type.startsWith('response.') && 
-            !data.type.startsWith('input_audio_buffer.') &&
-            !data.type.startsWith('conversation.item.created') &&
-            data.type !== 'response.created' &&
-            data.type !== 'response.done') {
-          this.logger.debug(`[RealtimeAPI] Unhandled message type: ${data.type}`, JSON.stringify(data, null, 2));
+        if (
+          data.type &&
+          !data.type.startsWith('response.') &&
+          !data.type.startsWith('input_audio_buffer.') &&
+          !data.type.startsWith('conversation.item.created') &&
+          data.type !== 'response.created' &&
+          data.type !== 'response.done'
+        ) {
+          this.logger.debug(
+            `[RealtimeAPI] Unhandled message type: ${data.type}`,
+            JSON.stringify(data, null, 2),
+          );
         }
         break;
     }
   }
 }
-

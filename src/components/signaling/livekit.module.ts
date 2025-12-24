@@ -5,7 +5,10 @@ import { LivekitService } from './livekit.service';
 import { LivekitResolver } from './livekit.resolver';
 import { AuthModule } from '../auth/auth.module';
 import { Meeting, MeetingSchema } from '../../schemas/Meeting.model';
-import { Participant, ParticipantSchema } from '../../schemas/Participant.model';
+import {
+  Participant,
+  ParticipantSchema,
+} from '../../schemas/Participant.model';
 
 @Module({
   imports: [

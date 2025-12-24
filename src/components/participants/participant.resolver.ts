@@ -1,4 +1,12 @@
-import { Resolver, Query, Mutation, Args, ID, Parent, Context } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ID,
+  Parent,
+  Context,
+} from '@nestjs/graphql';
 import { ParticipantService } from './participant.service';
 import { MeetingService } from '../meetings/meeting.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -60,7 +68,7 @@ import {
 
 @Resolver(() => ParticipantWithLoginInfo)
 export class ParticipantResolver {
-  private readonly logger = new Logger(ParticipantResolver.name)
+  private readonly logger = new Logger(ParticipantResolver.name);
 
   constructor(
     private readonly participantService: ParticipantService,
@@ -127,37 +135,42 @@ export class ParticipantResolver {
         firstLogin: null,
         lastLogin: null,
         totalDurationMinutes: 0,
-        isCurrentlyOnline: participant?.status === 'ADMITTED' || participant?.status === 'APPROVED',
-        sessions: []
+        isCurrentlyOnline:
+          participant?.status === 'ADMITTED' ||
+          participant?.status === 'APPROVED',
+        sessions: [],
       };
     }
 
-    const sessions = Array.isArray(participant.sessions) ? participant.sessions : [];
+    const sessions = Array.isArray(participant.sessions)
+      ? participant.sessions
+      : [];
     const now = new Date();
-    
+
     // Calculate total duration from sessions
     let totalDurationSec = participant.totalDurationSec || 0;
-    
+
     // If there's an active session (joinedAt exists but leftAt is null), calculate current duration
     if (sessions.length > 0) {
       const lastSession = sessions[sessions.length - 1];
       if (lastSession.joinedAt && !lastSession.leftAt) {
-        const durationMs = now.getTime() - new Date(lastSession.joinedAt).getTime();
+        const durationMs =
+          now.getTime() - new Date(lastSession.joinedAt).getTime();
         totalDurationSec += Math.floor(durationMs / 1000);
       }
     }
 
     const totalDurationMinutes = Math.floor(totalDurationSec / 60);
-    
+
     // Find first and last login
     let firstLogin = null;
     let lastLogin = null;
-    
+
     if (sessions.length > 0) {
       const joinedTimes = sessions
-        .filter(s => s.joinedAt)
-        .map(s => new Date(s.joinedAt).getTime());
-      
+        .filter((s) => s.joinedAt)
+        .map((s) => new Date(s.joinedAt).getTime());
+
       if (joinedTimes.length > 0) {
         firstLogin = new Date(Math.min(...joinedTimes));
         lastLogin = new Date(Math.max(...joinedTimes));
@@ -165,10 +178,10 @@ export class ParticipantResolver {
     }
 
     // Convert sessions to SessionInfo format
-    const sessionInfos = sessions.map(session => ({
+    const sessionInfos = sessions.map((session) => ({
       joinedAt: session.joinedAt,
       leftAt: session.leftAt,
-      durationMinutes: Math.floor((session.durationSec || 0) / 60)
+      durationMinutes: Math.floor((session.durationSec || 0) / 60),
     }));
 
     return {
@@ -176,8 +189,9 @@ export class ParticipantResolver {
       firstLogin,
       lastLogin,
       totalDurationMinutes,
-      isCurrentlyOnline: participant.status === 'ADMITTED' || participant.status === 'APPROVED',
-      sessions: sessionInfos
+      isCurrentlyOnline:
+        participant.status === 'ADMITTED' || participant.status === 'APPROVED',
+      sessions: sessionInfos,
     };
   }
 
@@ -187,7 +201,6 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ): Promise<any[]> {
-
     try {
       const result = await this.participantService.getParticipantsByMeeting(
         meetingId,
@@ -195,16 +208,18 @@ export class ParticipantResolver {
       );
 
       // Transform the data to match ParticipantWithLoginInfo type
-      const transformedResult = result.map(p => ({
+      const transformedResult = result.map((p) => ({
         _id: p._id.toString(),
         meetingId: p.meetingId.toString(),
-        user: p.userId ? {
-          _id: p.userId._id.toString(),
-          email: (p.userId as any).email,
-          displayName: (p.userId as any).displayName,
-          systemRole: (p.userId as any).systemRole,
-          avatarUrl: (p.userId as any).avatarUrl
-        } : null,
+        user: p.userId
+          ? {
+              _id: p.userId._id.toString(),
+              email: (p.userId as any).email,
+              displayName: (p.userId as any).displayName,
+              systemRole: (p.userId as any).systemRole,
+              avatarUrl: (p.userId as any).avatarUrl,
+            }
+          : null,
         displayName: p.displayName,
         role: p.role,
         status: p.status, // 🔧 FIX: Include status field for frontend filtering
@@ -217,10 +232,10 @@ export class ParticipantResolver {
         handLoweredAt: p.handLoweredAt,
         loginInfo: {
           joinedAt: p.createdAt,
-          lastSeen: p.updatedAt
+          lastSeen: p.updatedAt,
         },
         createdAt: p.createdAt,
-        updatedAt: p.updatedAt
+        updatedAt: p.updatedAt,
       }));
 
       return transformedResult;
@@ -281,7 +296,11 @@ export class ParticipantResolver {
     @Args('userIdToUnban', { type: () => ID }) userIdToUnban: string,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.unbanParticipant(meetingId, userIdToUnban, user._id);
+    return this.participantService.unbanParticipant(
+      meetingId,
+      userIdToUnban,
+      user._id,
+    );
   }
 
   @Mutation(() => ParticipantResponse, { name: 'joinMeeting' })
@@ -291,10 +310,13 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
     @Context() context: any,
   ) {
-
     try {
       const clientIp = this.extractClientIp(context);
-      const result = await this.participantService.joinMeeting(joinInput, user._id, clientIp || undefined);
+      const result = await this.participantService.joinMeeting(
+        joinInput,
+        user._id,
+        clientIp || undefined,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -316,9 +338,9 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    
     try {
-      const deletedCount = await this.participantService.clearFakeParticipants(meetingId);
+      const deletedCount =
+        await this.participantService.clearFakeParticipants(meetingId);
       return `Successfully cleared ${deletedCount} fake participants from meeting ${meetingId}`;
     } catch (error) {
       throw error;
@@ -333,12 +355,14 @@ export class ParticipantResolver {
     @Args('micState', { nullable: true }) micState?: string,
     @Args('cameraState', { nullable: true }) cameraState?: string,
   ) {
-
     try {
-      const result = await this.participantService.updateParticipantMediaState(participantId, {
-        micState: micState as any,
-        cameraState: cameraState as any
-      });
+      const result = await this.participantService.updateParticipantMediaState(
+        participantId,
+        {
+          micState: micState as any,
+          cameraState: cameraState as any,
+        },
+      );
       return result;
     } catch (error) {
       throw error;
@@ -351,9 +375,9 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    
     try {
-      const deletedCount = await this.participantService.cleanupDuplicateParticipants(meetingId);
+      const deletedCount =
+        await this.participantService.cleanupDuplicateParticipants(meetingId);
       return `Successfully cleaned up ${deletedCount} duplicate participants from meeting ${meetingId}`;
     } catch (error) {
       throw error;
@@ -366,60 +390,61 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    
     try {
-        const cleanedCount = await this.participantService.cleanupStaleParticipants(10); // 10 seconds threshold - AGGRESSIVE cleanup
+      const cleanedCount =
+        await this.participantService.cleanupStaleParticipants(10); // 10 seconds threshold - AGGRESSIVE cleanup
       return `Successfully cleaned up ${cleanedCount} stale participants from meeting ${meetingId}`;
     } catch (error) {
       throw error;
     }
   }
 
-  @Query(() => ParticipantWithLoginInfo, { 
+  @Query(() => ParticipantWithLoginInfo, {
     name: 'getParticipantByUserAndMeeting',
-    nullable: true 
+    nullable: true,
   })
   @UseGuards(AuthGuard)
   async getParticipantByUserAndMeeting(
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ): Promise<ParticipantWithLoginInfo | null> {
-
     try {
-      const result = await this.participantService.getParticipantByUserAndMeeting(
-        user._id,
-        meetingId
-      );
-      
+      const result =
+        await this.participantService.getParticipantByUserAndMeeting(
+          user._id,
+          meetingId,
+        );
+
       // Return null if no participation found (instead of throwing error)
       if (!result) {
         return null;
       }
 
       // Calculate loginInfo from sessions - filter out invalid sessions without joinedAt
-      const sessions = (result.sessions || []).filter(s => s.joinedAt);
+      const sessions = (result.sessions || []).filter((s) => s.joinedAt);
       const now = new Date();
-      
+
       // Calculate total duration
       let totalDurationSec = result.totalDurationSec || 0;
       if (sessions.length > 0) {
         const lastSession = sessions[sessions.length - 1];
         if (lastSession.joinedAt && !lastSession.leftAt) {
-          const durationMs = now.getTime() - new Date(lastSession.joinedAt).getTime();
+          const durationMs =
+            now.getTime() - new Date(lastSession.joinedAt).getTime();
           totalDurationSec += Math.floor(durationMs / 1000);
         }
       }
 
       const totalDurationMinutes = Math.floor(totalDurationSec / 60);
-      
+
       // Find first and last login
       let firstLogin = null;
       let lastLogin = null;
       if (sessions.length > 0) {
         const joinedTimes = sessions
-          .filter(s => s.joinedAt)
-          .map(s => new Date(s.joinedAt).getTime());
-        
+          .filter((s) => s.joinedAt)
+          .map((s) => new Date(s.joinedAt).getTime());
+
         if (joinedTimes.length > 0) {
           firstLogin = new Date(Math.min(...joinedTimes));
           lastLogin = new Date(Math.max(...joinedTimes));
@@ -427,35 +452,38 @@ export class ParticipantResolver {
       }
 
       const sessionInfos = sessions
-        .filter(session => {
+        .filter((session) => {
           return !!session.joinedAt;
         })
-        .map(session => {
+        .map((session) => {
           // If session is active (no leftAt), calculate current duration
           let durationSec = session.durationSec || 0;
           if (session.joinedAt && !session.leftAt) {
-            const durationMs = now.getTime() - new Date(session.joinedAt).getTime();
+            const durationMs =
+              now.getTime() - new Date(session.joinedAt).getTime();
             durationSec = Math.floor(durationMs / 1000);
           }
-          
+
           return {
             joinedAt: session.joinedAt,
             leftAt: session.leftAt,
-            durationMinutes: Math.floor(durationSec / 60)
+            durationMinutes: Math.floor(durationSec / 60),
           };
         });
 
       return {
         _id: result._id.toString(),
         meetingId: result.meetingId.toString(),
-        user: result.userId ? {
-          _id: result.userId._id.toString(),
-          email: (result.userId as any).email,
-          displayName: (result.userId as any).displayName,
-          avatarUrl: (result.userId as any).avatarUrl,
-          organization: (result.userId as any).organization,
-          department: (result.userId as any).department,
-        } : undefined,
+        user: result.userId
+          ? {
+              _id: result.userId._id.toString(),
+              email: (result.userId as any).email,
+              displayName: (result.userId as any).displayName,
+              avatarUrl: (result.userId as any).avatarUrl,
+              organization: (result.userId as any).organization,
+              department: (result.userId as any).department,
+            }
+          : undefined,
         displayName: result.displayName,
         role: result.role,
         status: result.status,
@@ -473,9 +501,10 @@ export class ParticipantResolver {
           firstLogin,
           lastLogin,
           totalDurationMinutes,
-          isCurrentlyOnline: result.status === 'ADMITTED' || result.status === 'APPROVED',
-          sessions: sessionInfos
-        }
+          isCurrentlyOnline:
+            result.status === 'ADMITTED' || result.status === 'APPROVED',
+          sessions: sessionInfos,
+        },
       };
     } catch (error) {
       throw error;
@@ -488,12 +517,12 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-
     try {
-      const participant = await this.participantService.getParticipantByUserAndMeeting(
-        user._id,
-        meetingId
-      );
+      const participant =
+        await this.participantService.getParticipantByUserAndMeeting(
+          user._id,
+          meetingId,
+        );
 
       if (!participant) {
         return 'No participant found for this meeting';
@@ -518,7 +547,6 @@ export class ParticipantResolver {
       throw error;
     }
   }
-
 
   @Mutation(() => ParticipantMessageResponse, { name: 'updateSession' })
   @UseGuards(AuthGuard)
@@ -564,7 +592,10 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     // Use the simplified method
-    const result = await this.participantService.approveParticipant(approveInput.participantId, user._id);
+    const result = await this.participantService.approveParticipant(
+      approveInput.participantId,
+      user._id,
+    );
     return {
       message: `Participant ${result.displayName} has been approved`,
       success: true,
@@ -586,7 +617,10 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     // Use the simplified method
-    const result = await this.participantService.rejectParticipant(rejectInput.participantId, user._id);
+    const result = await this.participantService.rejectParticipant(
+      rejectInput.participantId,
+      user._id,
+    );
     return {
       message: `Participant ${result.displayName} has been rejected`,
       success: true,
@@ -600,7 +634,10 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     // Use the simplified method - this is the same as approve
-    const result = await this.participantService.approveParticipant(admitInput.participantId, user._id);
+    const result = await this.participantService.approveParticipant(
+      admitInput.participantId,
+      user._id,
+    );
     return {
       message: `Participant ${result.displayName} has been admitted to the meeting`,
       success: true,
@@ -617,15 +654,19 @@ export class ParticipantResolver {
 
   // ==================== SIMPLIFIED WAITING ROOM RESOLVERS ====================
 
-  @Query(() => [ParticipantWithLoginInfo], { name: 'getWaitingParticipantsSimple' })
+  @Query(() => [ParticipantWithLoginInfo], {
+    name: 'getWaitingParticipantsSimple',
+  })
   @UseGuards(AuthGuard)
   async getWaitingParticipantsSimple(
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-
     try {
-      const result = await this.participantService.getWaitingParticipants(meetingId, user._id);
+      const result = await this.participantService.getWaitingParticipants(
+        meetingId,
+        user._id,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -638,9 +679,11 @@ export class ParticipantResolver {
     @Args('participantId', { type: () => ID }) participantId: string,
     @AuthMember() user: Member,
   ) {
-
     try {
-      const result = await this.participantService.approveParticipant(participantId, user._id);
+      const result = await this.participantService.approveParticipant(
+        participantId,
+        user._id,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -653,9 +696,11 @@ export class ParticipantResolver {
     @Args('participantId', { type: () => ID }) participantId: string,
     @AuthMember() user: Member,
   ) {
-
     try {
-      const result = await this.participantService.rejectParticipant(participantId, user._id);
+      const result = await this.participantService.rejectParticipant(
+        participantId,
+        user._id,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -668,9 +713,11 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-
     try {
-      const result = await this.participantService.admitAllWaitingParticipants(meetingId, user._id);
+      const result = await this.participantService.admitAllWaitingParticipants(
+        meetingId,
+        user._id,
+      );
       return result.message;
     } catch (error) {
       throw error;
@@ -743,25 +790,26 @@ export class ParticipantResolver {
     @Args('input') transferHostInput: TransferHostInput,
     @AuthMember() user: Member,
   ) {
-    
     // 🔍 ADDITIONAL DEBUG: Log detailed user information
-    
+
     try {
       const result = await this.participantService.transferHost(
         transferHostInput,
         user._id,
       );
-      
+
       // ✅ Emit WebSocket event to notify new host with LiveKit token
       if (result.newLiveKitToken && result.newHostId) {
-        this.logger.log(`[TRANSFER_HOST] Emitting host-transfer event to: ${result.newHostId}`);
+        this.logger.log(
+          `[TRANSFER_HOST] Emitting host-transfer event to: ${result.newHostId}`,
+        );
         this.signalingGateway.emitHostTransfer(
           result.newHostId,
           result.newLiveKitToken,
-          transferHostInput.meetingId
+          transferHostInput.meetingId,
         );
       }
-      
+
       return result;
     } catch (error) {
       throw error;
@@ -781,7 +829,10 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     try {
-      const result = await this.participantService.getMeetingAttendance(meetingId, user._id);
+      const result = await this.participantService.getMeetingAttendance(
+        meetingId,
+        user._id,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -790,14 +841,19 @@ export class ParticipantResolver {
 
   // ==================== SCREEN SHARING RESOLVERS ====================
 
-  @Mutation(() => ScreenShareControlResponse, { name: 'forceScreenShareControl' })
+  @Mutation(() => ScreenShareControlResponse, {
+    name: 'forceScreenShareControl',
+  })
   @UseGuards(AuthGuard)
   async forceScreenShareControl(
     @Args('input') input: ForceScreenShareInput,
     @AuthMember() user: Member,
   ) {
     try {
-      const result = await this.participantService.forceScreenShareControl(input, user._id);
+      const result = await this.participantService.forceScreenShareControl(
+        input,
+        user._id,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -811,7 +867,10 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     try {
-      const result = await this.participantService.updateScreenShareInfo(input, user._id);
+      const result = await this.participantService.updateScreenShareInfo(
+        input,
+        user._id,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -825,7 +884,10 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     try {
-      const result = await this.participantService.getScreenShareStatus(input, user._id);
+      const result = await this.participantService.getScreenShareStatus(
+        input,
+        user._id,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -839,7 +901,8 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     try {
-      const result = await this.participantService.getActiveScreenSharers(meetingId);
+      const result =
+        await this.participantService.getActiveScreenSharers(meetingId);
       return result;
     } catch (error) {
       throw error;
@@ -854,7 +917,6 @@ export class ParticipantResolver {
     @Args('input') input: RaiseHandInput,
     @AuthMember() user: Member,
   ) {
-    
     try {
       const result = await this.participantService.raiseHand(input, user._id);
       return result;
@@ -884,7 +946,10 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     try {
-      const result = await this.participantService.hostLowerHand(input, user._id);
+      const result = await this.participantService.hostLowerHand(
+        input,
+        user._id,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -898,12 +963,15 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     try {
-      const result = await this.participantService.lowerAllHands(meetingId, user._id);
+      const result = await this.participantService.lowerAllHands(
+        meetingId,
+        user._id,
+      );
       return {
         success: true,
         message: `Lowered ${result.length} hands`,
         meetingId,
-        loweredHandsCount: result.length
+        loweredHandsCount: result.length,
       };
     } catch (error) {
       throw error;
@@ -917,7 +985,10 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     try {
-      const result = await this.participantService.getRaisedHands(input, user._id);
+      const result = await this.participantService.getRaisedHands(
+        input,
+        user._id,
+      );
       return result;
     } catch (error) {
       throw error;
@@ -931,7 +1002,8 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     try {
-      const result = await this.participantService.getParticipantHandStatus(participantId);
+      const result =
+        await this.participantService.getParticipantHandStatus(participantId);
       return result;
     } catch (error) {
       throw error;

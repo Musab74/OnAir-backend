@@ -20,9 +20,7 @@ import { AuthModule } from '../auth/auth.module';
       useFactory: async (configService: ConfigService) => {
         const secret = configService.get<string>('JWT_SECRET');
         if (!secret || secret.trim().length === 0) {
-          throw new Error(
-            'JWT_SECRET is not set or is empty in .env file!',
-          );
+          throw new Error('JWT_SECRET is not set or is empty in .env file!');
         }
         return {
           secret: secret,
@@ -41,4 +39,3 @@ import { AuthModule } from '../auth/auth.module';
   exports: [TranscriptionGateway, RealtimeTranscriptionGateway],
 })
 export class TranscriptionModule {}
-

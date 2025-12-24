@@ -1,9 +1,4 @@
-import {
-  IsOptional,
-  IsString,
-  IsMongoId,
-  MaxLength,
-} from 'class-validator';
+import { IsOptional, IsString, IsMongoId, MaxLength } from 'class-validator';
 import { Field, InputType } from '@nestjs/graphql';
 
 @InputType()
@@ -70,4 +65,3 @@ export class UnsubscribeSubtitlesInput {
   @IsMongoId()
   meetingId!: string;
 }
-

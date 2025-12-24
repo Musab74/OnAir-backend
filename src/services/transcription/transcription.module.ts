@@ -8,4 +8,3 @@ import { TranscriptionService } from './transcription.service';
   exports: [TranscriptionService],
 })
 export class TranscriptionServiceModule {}
-

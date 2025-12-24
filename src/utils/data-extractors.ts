@@ -12,25 +12,28 @@ export const extractChatMessages = (chatData: any): any[] => {
   if (Array.isArray(chatData)) {
     return chatData; // Direct array
   }
-  
+
   if (chatData?.getChatHistory?.messages) {
     return chatData.getChatHistory.messages; // Nested in getChatHistory
   }
-  
+
   if (chatData?.messages) {
     return chatData.messages; // Direct messages property
   }
-  
+
   return []; // Fallback to empty array
 };
 
 export const extractChatStats = (chatData: any) => {
-  return chatData?.getChatStats || chatData || {
-    totalMessages: 0,
-    messagesToday: 0,
-    activeUsers: 0,
-    averageMessagesPerUser: 0
-  };
+  return (
+    chatData?.getChatStats ||
+    chatData || {
+      totalMessages: 0,
+      messagesToday: 0,
+      activeUsers: 0,
+      averageMessagesPerUser: 0,
+    }
+  );
 };
 
 // ========================================
@@ -58,15 +61,15 @@ export const extractParticipants = (participantData: any): any[] => {
   if (Array.isArray(participantData)) {
     return participantData; // Direct array
   }
-  
+
   if (participantData?.getParticipantsByMeeting) {
     return participantData.getParticipantsByMeeting; // Nested in query
   }
-  
+
   if (participantData?.participants) {
     return participantData.participants; // Nested in participants property
   }
-  
+
   return []; // Fallback to empty array
 };
 
@@ -75,15 +78,18 @@ export const extractJoinedParticipant = (joinData: any) => {
 };
 
 export const extractParticipantStats = (statsData: any) => {
-  return statsData?.getParticipantStats || statsData || {
-    totalParticipants: 0,
-    currentlyOnline: 0,
-    activeParticipants: 0,
-    mutedParticipants: 0,
-    cameraOffParticipants: 0,
-    raisedHandsCount: 0,
-    screenSharersCount: 0
-  };
+  return (
+    statsData?.getParticipantStats ||
+    statsData || {
+      totalParticipants: 0,
+      currentlyOnline: 0,
+      activeParticipants: 0,
+      mutedParticipants: 0,
+      cameraOffParticipants: 0,
+      raisedHandsCount: 0,
+      screenSharersCount: 0,
+    }
+  );
 };
 
 export const extractRaisedHands = (handsData: any) => {
@@ -94,19 +100,26 @@ export const extractWaitingParticipants = (waitingData: any): any[] => {
   if (Array.isArray(waitingData)) {
     return waitingData;
   }
-  
-  return waitingData?.getWaitingParticipants || waitingData?.waitingParticipants || [];
+
+  return (
+    waitingData?.getWaitingParticipants ||
+    waitingData?.waitingParticipants ||
+    []
+  );
 };
 
 // ========================================
 // SAFE ITERATION HELPERS
 // ========================================
 
-export const safeMap = <T>(data: any, mapper: (item: T, index: number) => any): any[] => {
+export const safeMap = <T>(
+  data: any,
+  mapper: (item: T, index: number) => any,
+): any[] => {
   if (!Array.isArray(data)) {
     return [];
   }
-  
+
   try {
     return data.map(mapper);
   } catch (error) {
@@ -114,11 +127,14 @@ export const safeMap = <T>(data: any, mapper: (item: T, index: number) => any): 
   }
 };
 
-export const safeFilter = <T>(data: any, predicate: (item: T) => boolean): T[] => {
+export const safeFilter = <T>(
+  data: any,
+  predicate: (item: T) => boolean,
+): T[] => {
   if (!Array.isArray(data)) {
     return [];
   }
-  
+
   try {
     return data.filter(predicate);
   } catch (error) {
@@ -126,11 +142,14 @@ export const safeFilter = <T>(data: any, predicate: (item: T) => boolean): T[] =
   }
 };
 
-export const safeFind = <T>(data: any, predicate: (item: T) => boolean): T | undefined => {
+export const safeFind = <T>(
+  data: any,
+  predicate: (item: T) => boolean,
+): T | undefined => {
   if (!Array.isArray(data)) {
     return undefined;
   }
-  
+
   try {
     return data.find(predicate);
   } catch (error) {
@@ -149,4 +168,3 @@ export const handleGraphQLError = (error: any, fallback: any = null) => {
 export const isGraphQLError = (error: any): boolean => {
   return error?.graphQLErrors?.length > 0 || error?.networkError;
 };
-

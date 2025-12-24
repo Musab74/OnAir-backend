@@ -19,14 +19,17 @@ export class Session {
   durationSec!: number;
 }
 
-const SessionSchema = new mongoose.Schema({
-  joinedAt: { type: Date, required: true },
-  leftAt: { type: Date, required: false },
-  durationSec: { type: Number, default: 0 }
-}, { _id: false });
+const SessionSchema = new mongoose.Schema(
+  {
+    joinedAt: { type: Date, required: true },
+    leftAt: { type: Date, required: false },
+    durationSec: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
 
 // Add pre-save middleware to ensure joinedAt is always set
-SessionSchema.pre('save', function(next) {
+SessionSchema.pre('save', function (next) {
   if (!this.joinedAt) {
     this.joinedAt = new Date();
   }

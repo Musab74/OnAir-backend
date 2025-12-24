@@ -15,11 +15,12 @@ async function fixUserIdIndex() {
     // Connect to MongoDB - Use same logic as database.module.ts
     const isProd = process.env.NODE_ENV === 'production';
     const MONGODB_URI = isProd ? process.env.MONGODB_PROD : process.env.MONGODB;
-    
+
     if (!MONGODB_URI) {
-      throw new Error('MongoDB URI not found in environment variables. Set MONGODB or MONGODB_PROD');
+      throw new Error(
+        'MongoDB URI not found in environment variables. Set MONGODB or MONGODB_PROD',
+      );
     }
-    
 
     const db = mongoose.connection.db;
     const membersCollection = db.collection('members');
@@ -42,7 +43,7 @@ async function fixUserIdIndex() {
 
     await membersCollection.createIndex(
       { user_id: 1 },
-      { unique: true, sparse: true }
+      { unique: true, sparse: true },
     );
 
     await membersCollection.createIndex({ email: 1 }, { unique: false });
@@ -51,7 +52,7 @@ async function fixUserIdIndex() {
     const indexes = await membersCollection.indexes();
 
     await mongoose.disconnect();
-    
+
     process.exit(0);
   } catch (error) {
     process.exit(1);
@@ -59,4 +60,3 @@ async function fixUserIdIndex() {
 }
 
 fixUserIdIndex();
-

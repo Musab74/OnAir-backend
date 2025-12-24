@@ -34,7 +34,9 @@ export class MemberService {
     const normalizedEmail = email.toLowerCase().trim();
 
     // Check if user already exists
-    const existingUser = await this.memberModel.findOne({ email: normalizedEmail });
+    const existingUser = await this.memberModel.findOne({
+      email: normalizedEmail,
+    });
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
@@ -61,7 +63,6 @@ export class MemberService {
     // Return user data without password
     const { passwordHash: _, ...userWithoutPassword } = savedUser.toObject();
 
-
     return {
       user: userWithoutPassword,
       token,
@@ -76,7 +77,9 @@ export class MemberService {
     const normalizedEmail = email.toLowerCase().trim();
 
     // Check if user already exists
-    const existingUser = await this.memberModel.findOne({ email: normalizedEmail });
+    const existingUser = await this.memberModel.findOne({
+      email: normalizedEmail,
+    });
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
@@ -103,7 +106,6 @@ export class MemberService {
     // Return user data without password
     const { passwordHash: _, ...userWithoutPassword } = savedUser.toObject();
 
-
     return {
       user: userWithoutPassword,
       token,
@@ -125,7 +127,9 @@ export class MemberService {
 
     // Check if user has a password hash (SSO users might not have one)
     if (!user.passwordHash || user.passwordHash.trim() === '') {
-      throw new UnauthorizedException('Invalid credentials. This account may have been created via SSO. Please use SSO login.');
+      throw new UnauthorizedException(
+        'Invalid credentials. This account may have been created via SSO. Please use SSO login.',
+      );
     }
 
     // Verify password
@@ -176,7 +180,9 @@ export class MemberService {
 
     // Check if user has a password hash (SSO users might not have one)
     if (!user.passwordHash || user.passwordHash.trim() === '') {
-      throw new UnauthorizedException('Invalid credentials. This account may have been created via SSO. Please use SSO login.');
+      throw new UnauthorizedException(
+        'Invalid credentials. This account may have been created via SSO. Please use SSO login.',
+      );
     }
 
     // Verify password
@@ -197,7 +203,6 @@ export class MemberService {
 
     // Return user data without password
     const { passwordHash: _, ...userWithoutPassword } = user.toObject();
-
 
     return {
       user: userWithoutPassword,
@@ -225,7 +230,9 @@ export class MemberService {
 
     // Check if user has a password hash (SSO users might not have one)
     if (!user.passwordHash || user.passwordHash.trim() === '') {
-      throw new UnauthorizedException('Invalid credentials. This account may have been created via SSO. Please use SSO login.');
+      throw new UnauthorizedException(
+        'Invalid credentials. This account may have been created via SSO. Please use SSO login.',
+      );
     }
 
     // Verify password
@@ -246,7 +253,6 @@ export class MemberService {
 
     // Return user data without password
     const { passwordHash: _, ...userWithoutPassword } = user.toObject();
-
 
     return {
       user: userWithoutPassword,
@@ -433,7 +439,6 @@ export class MemberService {
 
   // ADMIN: PROMOTE USER ROLE
   async promoteUserRole(userId: string, newRole: SystemRole, adminId: string) {
-
     try {
       // Verify admin has permission
       const admin = await this.memberModel.findById(adminId);
@@ -472,7 +477,6 @@ export class MemberService {
 
   // ADMIN: DELETE USER
   async deleteUser(userId: string, adminId: string) {
-
     try {
       // Verify admin has permission
       const admin = await this.memberModel.findById(adminId);
@@ -513,7 +517,6 @@ export class MemberService {
 
   // ADMIN: BLOCK USER
   async blockUser(userId: string, adminId: string, reason?: string) {
-
     try {
       // Verify admin has permission
       const admin = await this.memberModel.findById(adminId);
@@ -567,7 +570,6 @@ export class MemberService {
 
   // ADMIN: UNBLOCK USER
   async unblockUser(userId: string, adminId: string) {
-
     try {
       // Verify admin has permission
       const admin = await this.memberModel.findById(adminId);
@@ -617,7 +619,6 @@ export class MemberService {
 
   // CREATE FIRST ADMIN (for initial setup only)
   async createFirstAdmin(adminInput: MemberInput) {
-
     try {
       const { email, password, displayName, department, phone } = adminInput;
 
@@ -655,7 +656,6 @@ export class MemberService {
 
       // Generate JWT token
       const token = await this.authService.createToken(savedAdmin);
-
 
       return {
         token,

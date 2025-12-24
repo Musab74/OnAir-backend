@@ -112,13 +112,15 @@ export class TranscriptionController {
    */
   @Post('transcribe-and-translate')
   @UseInterceptors(FileInterceptor('audio'))
-  @UsePipes(new ValidationPipe({ 
-    skipMissingProperties: true, 
-    transform: false, 
-    whitelist: false,
-    forbidNonWhitelisted: false,
-    validateCustomDecorators: false,
-  }))
+  @UsePipes(
+    new ValidationPipe({
+      skipMissingProperties: true,
+      transform: false,
+      whitelist: false,
+      forbidNonWhitelisted: false,
+      validateCustomDecorators: false,
+    }),
+  )
   async transcribeAndTranslate(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: any,
@@ -144,34 +146,34 @@ export class TranscriptionController {
     const targetLanguage = body?.targetLanguage || req.body?.targetLanguage;
     const meetingId = body?.meetingId || req.body?.meetingId;
 
-    this.logger.log('[CONTROLLER] Extracted fields:', { 
-      targetLanguage, 
+    this.logger.log('[CONTROLLER] Extracted fields:', {
+      targetLanguage,
       meetingId,
       bodyFields: body,
       reqBodyFields: req.body,
     });
 
     if (!targetLanguage) {
-      this.logger.error('[CONTROLLER] Missing targetLanguage', { 
+      this.logger.error('[CONTROLLER] Missing targetLanguage', {
         body: body,
         reqBody: req.body,
         bodyKeys: Object.keys(body || {}),
         reqBodyKeys: Object.keys(req.body || {}),
       });
       throw new BadRequestException(
-        `Target language is required. Body: ${JSON.stringify(body || {})}, ReqBody: ${JSON.stringify(req.body || {})}`
+        `Target language is required. Body: ${JSON.stringify(body || {})}, ReqBody: ${JSON.stringify(req.body || {})}`,
       );
     }
 
     if (!meetingId) {
-      this.logger.error('[CONTROLLER] Missing meetingId', { 
+      this.logger.error('[CONTROLLER] Missing meetingId', {
         body: body,
         reqBody: req.body,
         bodyKeys: Object.keys(body || {}),
         reqBodyKeys: Object.keys(req.body || {}),
       });
       throw new BadRequestException(
-        `Meeting ID is required. Body: ${JSON.stringify(body || {})}, ReqBody: ${JSON.stringify(req.body || {})}`
+        `Meeting ID is required. Body: ${JSON.stringify(body || {})}, ReqBody: ${JSON.stringify(req.body || {})}`,
       );
     }
 
@@ -194,7 +196,9 @@ export class TranscriptionController {
         throw new BadRequestException('Invalid audio file format or size');
       }
 
-      this.logger.log('[CONTROLLER] Audio validation passed, starting transcription...');
+      this.logger.log(
+        '[CONTROLLER] Audio validation passed, starting transcription...',
+      );
 
       // Transcribe and translate - pass mimetype to ensure correct format
       const result = await this.transcriptionService.transcribeAndTranslate(
@@ -211,15 +215,18 @@ export class TranscriptionController {
       // Validate that we have meaningful text to broadcast
       const originalText = result.transcription.text?.trim() || '';
       const translatedText = result.translation.translatedText?.trim() || '';
-      
+
       // Skip broadcasting if text is empty or too short
       if (!translatedText || translatedText.length < 2) {
-        this.logger.debug(`[CONTROLLER] Skipping broadcast - empty or too short text:`, {
-          originalText,
-          translatedText,
-          originalLength: originalText.length,
-          translatedLength: translatedText.length,
-        });
+        this.logger.debug(
+          `[CONTROLLER] Skipping broadcast - empty or too short text:`,
+          {
+            originalText,
+            translatedText,
+            originalLength: originalText.length,
+            translatedLength: translatedText.length,
+          },
+        );
         return {
           success: true,
           data: {
@@ -235,7 +242,10 @@ export class TranscriptionController {
       }
 
       // Format subtitle data - use actual detected language from transcription
-      const sourceLanguage = result.transcription.language || result.translation.sourceLanguage || 'en';
+      const sourceLanguage =
+        result.transcription.language ||
+        result.translation.sourceLanguage ||
+        'en';
       const subtitleData = this.transcriptionService.formatSubtitleData(
         participantId,
         originalText,
@@ -246,26 +256,33 @@ export class TranscriptionController {
       );
 
       // Broadcast subtitle via WebSocket
-      this.logger.log(`[CONTROLLER] Broadcasting subtitle for meeting ${meetingId}`, {
-        translatedText,
-        originalText,
-        participantId,
-        participantName,
-        sourceLanguage: result.transcription.language,
-        targetLanguage: result.translation.targetLanguage,
-      });
+      this.logger.log(
+        `[CONTROLLER] Broadcasting subtitle for meeting ${meetingId}`,
+        {
+          translatedText,
+          originalText,
+          participantId,
+          participantName,
+          sourceLanguage: result.transcription.language,
+          targetLanguage: result.translation.targetLanguage,
+        },
+      );
 
       // Broadcast subtitle (now async) - don't wait for it to complete
-      this.transcriptionGateway.broadcastSubtitle(meetingId, {
-        ...subtitleData,
-        participantName,
-      } as any).catch((error) => {
-        this.logger.error(`[CONTROLLER] Broadcast subtitle error: ${error.message}`);
-      });
+      this.transcriptionGateway
+        .broadcastSubtitle(meetingId, {
+          ...subtitleData,
+          participantName,
+        } as any)
+        .catch((error) => {
+          this.logger.error(
+            `[CONTROLLER] Broadcast subtitle error: ${error.message}`,
+          );
+        });
 
       this.logger.log(
         `[CONTROLLER] Transcription and translation completed for meeting ${meetingId}`,
-        { translatedText: result.translation.translatedText }
+        { translatedText: result.translation.translatedText },
       );
 
       return {
@@ -302,4 +319,3 @@ export class TranscriptionController {
     };
   }
 }
-

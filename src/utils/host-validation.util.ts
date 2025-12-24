@@ -29,7 +29,7 @@ export class HostValidationUtil {
     userSystemRole: string,
     participantModel: any,
     meetingId: string,
-    currentHostId?: any
+    currentHostId?: any,
   ): Promise<HostValidationResult> {
     // Method 1: Check if user is admin
     const isAdmin = userSystemRole === 'ADMIN';
@@ -38,7 +38,9 @@ export class HostValidationUtil {
     const isMeetingHost = MeetingUtils.isMeetingHost(meetingHostId, userId);
 
     // Method 2b: Check if user is the current host (for transferred host)
-    const isCurrentHost = currentHostId ? MeetingUtils.isMeetingHost(currentHostId, userId) : false;
+    const isCurrentHost = currentHostId
+      ? MeetingUtils.isMeetingHost(currentHostId, userId)
+      : false;
 
     // Method 3: Check if user has HOST role in participants
     let isHostParticipant = false;
@@ -47,24 +49,30 @@ export class HostValidationUtil {
         meetingId: new Types.ObjectId(meetingId),
         $or: [
           { userId: new Types.ObjectId(userId) },
-          { 'userId._id': new Types.ObjectId(userId) }
+          { 'userId._id': new Types.ObjectId(userId) },
         ],
         role: 'HOST',
       });
-      
+
       isHostParticipant = !!hostParticipant;
     } catch (error) {
-      this.logger.warn(`[HOST_VALIDATION] Error checking host participant:`, error);
+      this.logger.warn(
+        `[HOST_VALIDATION] Error checking host participant:`,
+        error,
+      );
     }
 
-    const isAuthorized = isAdmin || isMeetingHost || isCurrentHost || isHostParticipant;
-    
+    const isAuthorized =
+      isAdmin || isMeetingHost || isCurrentHost || isHostParticipant;
+
     const result: HostValidationResult = {
       isAuthorized,
       isMeetingHost: isMeetingHost || isCurrentHost,
       isHostParticipant,
       isAdmin,
-      reason: isAuthorized ? 'User is authorized' : 'User is not authorized to perform this action'
+      reason: isAuthorized
+        ? 'User is authorized'
+        : 'User is not authorized to perform this action',
     };
 
     return result;
@@ -78,7 +86,7 @@ export class HostValidationUtil {
    */
   static isMeetingHost(meetingHostId: any, userId: string): boolean {
     if (!meetingHostId) return false;
-    
+
     if (typeof meetingHostId === 'object' && '_id' in meetingHostId) {
       // Populated hostId object
       return meetingHostId._id.toString() === userId.toString();

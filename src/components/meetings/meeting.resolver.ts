@@ -153,19 +153,24 @@ export class MeetingResolver {
       this.logger.error(
         `[GET_MEETING_BY_ID] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`,
       );
-      
+
       // If it's a permission error, try to get meeting without user check
       if (error.message?.includes('You can only view meetings')) {
-        this.logger.warn(`[GET_MEETING_BY_ID] Permission denied, trying public access for meeting ${meetingId}`);
+        this.logger.warn(
+          `[GET_MEETING_BY_ID] Permission denied, trying public access for meeting ${meetingId}`,
+        );
         try {
-          const result = await this.meetingService.getMeetingByIdPublic(meetingId);
+          const result =
+            await this.meetingService.getMeetingByIdPublic(meetingId);
           return result;
         } catch (publicError) {
-          this.logger.error(`[GET_MEETING_BY_ID] Public access also failed - Meeting ID: ${meetingId}, Error: ${publicError.message}`);
+          this.logger.error(
+            `[GET_MEETING_BY_ID] Public access also failed - Meeting ID: ${meetingId}, Error: ${publicError.message}`,
+          );
           throw publicError;
         }
       }
-      
+
       throw error;
     }
   }
@@ -240,7 +245,7 @@ export class MeetingResolver {
         joinInput,
         user._id,
       );
-      
+
       // Transform to SimpleMeetingInfo
       const simpleMeeting = {
         _id: result.meeting._id,
@@ -260,7 +265,7 @@ export class MeetingResolver {
         hostId: result.meeting.hostId,
         host: result.meeting.host,
       };
-      
+
       return {
         success: true,
         message: result.message,
@@ -303,15 +308,17 @@ export class MeetingResolver {
   ) {
     try {
       const result = await this.meetingService.endMeeting(meetingId, user._id);
-      
+
       // Emit WebSocket event to notify all participants immediately
       try {
         await this.signalingGateway.notifyMeetingEnded(meetingId);
       } catch (wsError) {
-        this.logger.warn(`[END_MEETING] Failed to emit WebSocket event: ${wsError.message}`);
+        this.logger.warn(
+          `[END_MEETING] Failed to emit WebSocket event: ${wsError.message}`,
+        );
         // Don't fail the meeting end if WebSocket fails
       }
-      
+
       return result;
     } catch (error) {
       this.logger.error(
@@ -402,10 +409,14 @@ export class MeetingResolver {
   async cleanupOrphanedMeetings(@AuthMember() user: Member) {
     try {
       const result = await this.meetingService.cleanupOrphanedMeetings();
-      this.logger.log(`[CLEANUP] Admin ${user._id} ran cleanup - Fixed: ${result.fixed}, Deleted: ${result.deleted}`);
+      this.logger.log(
+        `[CLEANUP] Admin ${user._id} ran cleanup - Fixed: ${result.fixed}, Deleted: ${result.deleted}`,
+      );
       return `Cleanup complete: Fixed ${result.fixed} meetings, Deleted ${result.deleted} orphaned meetings`;
     } catch (error) {
-      this.logger.error(`[CLEANUP] Failed - User ID: ${user._id}, Error: ${error.message}`);
+      this.logger.error(
+        `[CLEANUP] Failed - User ID: ${user._id}, Error: ${error.message}`,
+      );
       throw error;
     }
   }

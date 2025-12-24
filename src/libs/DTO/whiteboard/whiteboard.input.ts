@@ -21,13 +21,3 @@ export class StopWhiteboardInput {
   @IsString()
   meetingId!: string;
 }
-
-
-
-
-
-
-
-
-
-

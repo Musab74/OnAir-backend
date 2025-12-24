@@ -34,13 +34,3 @@ export class WhiteboardResolver {
     };
   }
 }
-
-
-
-
-
-
-
-
-
-

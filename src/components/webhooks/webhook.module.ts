@@ -6,9 +6,7 @@ import { LivekitService } from '../signaling/livekit.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: Meeting.name, schema: MeetingSchema },
-    ]),
+    MongooseModule.forFeature([{ name: Meeting.name, schema: MeetingSchema }]),
   ],
   controllers: [WebhookController],
   providers: [LivekitService],

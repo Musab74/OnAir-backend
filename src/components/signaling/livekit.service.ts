@@ -1,9 +1,6 @@
 import { Injectable, Scope } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  AccessToken,
-  RoomServiceClient,
-} from 'livekit-server-sdk';
+import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 
 @Injectable({ scope: Scope.DEFAULT })
 export class LivekitService {
@@ -18,17 +15,17 @@ export class LivekitService {
   constructor(config: ConfigService) {
     this.apiKey = config.get<string>('LIVEKIT_API_KEY')!;
     this.apiSecret = config.get<string>('LIVEKIT_API_SECRET')!;
-    
+
     // Server 1 configuration
     const base = config.get<string>('LIVEKIT_URL')!; // https://...
     this.httpUrl = base.replace(/\/$/, '');
     this.wsUrl = this.httpUrl.replace('http', 'ws'); // wss://...
-    
+
     // Server 2 configuration
     const base2 = config.get<string>('LIVEKIT2_URL')!; // https://...
     this.httpUrl2 = base2.replace(/\/$/, '');
     this.wsUrl2 = this.httpUrl2.replace('http', 'ws'); // wss://...
-    
+
     // Log configuration on startup
   }
 
@@ -39,16 +36,15 @@ export class LivekitService {
    */
   getWsUrl(roomId?: string): string {
     if (!roomId) return this.wsUrl; // Fallback to Server 1 for backwards compatibility
-    
+
     const lastChar = roomId.slice(-1);
     const isEven = parseInt(lastChar) % 2 === 0;
     const selectedServer = isEven ? 'Server 1' : 'Server 2';
     const selectedUrl = isEven ? this.wsUrl : this.wsUrl2;
-    
-    
+
     return selectedUrl;
   }
-  
+
   /**
    * Get HTTP URL for the appropriate server based on room ID
    */
@@ -57,11 +53,10 @@ export class LivekitService {
     const isEven = parseInt(lastChar) % 2 === 0;
     const selectedServer = isEven ? 'Server 1' : 'Server 2';
     const selectedUrl = isEven ? this.httpUrl : this.httpUrl2;
-    
-    
+
     return selectedUrl;
   }
-  
+
   /**
    * Get appropriate RoomServiceClient for the room
    */
@@ -76,7 +71,6 @@ export class LivekitService {
     name: string;
     meetingRole: 'HOST' | 'CO_HOST' | 'PRESENTER' | 'PARTICIPANT' | 'VIEWER';
   }): string | Promise<string> {
-
     try {
       const at = new AccessToken(this.apiKey, this.apiSecret, {
         identity: opts.identity,
@@ -155,6 +149,9 @@ export class LivekitService {
 
   // Get VOD server recordings URL
   getVodRecordingsUrl(): string {
-    return process.env.VOD_SERVER_RECORDINGS_URL || 'https://i-vod1.hrdeedu.co.kr/recordings';
+    return (
+      process.env.VOD_SERVER_RECORDINGS_URL ||
+      'https://i-vod1.hrdeedu.co.kr/recordings'
+    );
   }
 }

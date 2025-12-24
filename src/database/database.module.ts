@@ -25,6 +25,5 @@ import { Connection } from 'mongoose';
   exports: [MongooseModule],
 })
 export class DatabaseModule {
-  constructor(@InjectConnection() conn: Connection) {
-  }
+  constructor(@InjectConnection() conn: Connection) {}
 }

@@ -79,7 +79,10 @@ export class ParticipantService {
     private readonly livekitService: LivekitService,
   ) {}
 
-  async getParticipantsByMeeting(meetingId: string, userId: string): Promise<Participant[]> {
+  async getParticipantsByMeeting(
+    meetingId: string,
+    userId: string,
+  ): Promise<Participant[]> {
     // First, check if meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
@@ -92,17 +95,23 @@ export class ParticipantService {
     // Hosts can see WAITING participants separately via getWaitingParticipants query
     // Check both original host (hostId) and current host (currentHostId)
     const isOriginalHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
-    const isCurrentHost = meeting.currentHostId ? MeetingUtils.isMeetingHost(meeting.currentHostId, userId) : false;
+    const isCurrentHost = meeting.currentHostId
+      ? MeetingUtils.isMeetingHost(meeting.currentHostId, userId)
+      : false;
     const isHost = isOriginalHost || isCurrentHost;
-    const statusFilter = { $in: [ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED] };
+    const statusFilter = {
+      $in: [ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED],
+    };
 
-    const participants = await this.participantModel.find({
-      meetingId: new Types.ObjectId(meetingId),
-      status: statusFilter
-    }).populate('userId', 'email displayName systemRole avatarUrl');
+    const participants = await this.participantModel
+      .find({
+        meetingId: new Types.ObjectId(meetingId),
+        status: statusFilter,
+      })
+      .populate('userId', 'email displayName systemRole avatarUrl');
 
     // Filter out participants where userId populate failed (user was deleted)
-    const validParticipants = participants.filter(participant => {
+    const validParticipants = participants.filter((participant) => {
       if (!participant.userId) {
         return false;
       }
@@ -158,14 +167,18 @@ export class ParticipantService {
         const sessions = p.sessions || [];
         return sessions.length > 0 && !sessions[sessions.length - 1].leftAt;
       }).length,
-      mutedParticipants: participants.filter((p) =>
-        p.micState === 'OFF' || p.micState === 'MUTED' || p.micState === 'MUTED_BY_HOST'
+      mutedParticipants: participants.filter(
+        (p) =>
+          p.micState === 'OFF' ||
+          p.micState === 'MUTED' ||
+          p.micState === 'MUTED_BY_HOST',
       ).length,
-      cameraOffParticipants: participants.filter((p) =>
-        p.cameraState === 'OFF' || p.cameraState === 'OFF_BY_HOST'
+      cameraOffParticipants: participants.filter(
+        (p) => p.cameraState === 'OFF' || p.cameraState === 'OFF_BY_HOST',
       ).length,
       raisedHandsCount: participants.filter((p) => p.hasHandRaised).length,
-      screenSharersCount: participants.filter((p) => p.screenState === 'ON').length,
+      screenSharersCount: participants.filter((p) => p.screenState === 'ON')
+        .length,
     };
 
     // Calculate average session duration
@@ -290,7 +303,7 @@ export class ParticipantService {
     if (participant.userId) {
       const userId = participant.userId.toString();
       const bannedUserIds = meeting.bannedUserIds || [];
-      
+
       if (!bannedUserIds.includes(userId)) {
         bannedUserIds.push(userId);
         await this.meetingModel.findByIdAndUpdate(participant.meetingId, {
@@ -302,14 +315,21 @@ export class ParticipantService {
     // Force disconnect from LiveKit BEFORE removing from database
     try {
       const roomName = participant.meetingId.toString(); // Use meetingId directly as room name (matches token generation)
-      const identity = participant.userId?.toString() || participant.displayName;
-      
-      this.logger.log(`Attempting to disconnect participant ${identity} from LiveKit room ${roomName}`);
+      const identity =
+        participant.userId?.toString() || participant.displayName;
+
+      this.logger.log(
+        `Attempting to disconnect participant ${identity} from LiveKit room ${roomName}`,
+      );
       await this.livekitService.removeParticipant(roomName, identity);
-      this.logger.log(`Successfully disconnected participant ${identity} from LiveKit room ${roomName}`);
+      this.logger.log(
+        `Successfully disconnected participant ${identity} from LiveKit room ${roomName}`,
+      );
     } catch (livekitError) {
       // Log error but don't fail the removal - participant might not be in LiveKit room
-      this.logger.warn(`Failed to disconnect participant from LiveKit: ${livekitError.message}`);
+      this.logger.warn(
+        `Failed to disconnect participant from LiveKit: ${livekitError.message}`,
+      );
     }
 
     // Remove the participant
@@ -320,19 +340,22 @@ export class ParticipantService {
       $inc: { participantCount: -1 },
     });
 
-
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: 'Participant removed and banned from rejoining',
       removedParticipant: {
         userId: participant.userId?.toString(),
         meetingId: participant.meetingId,
-        displayName: participant.displayName
-      }
+        displayName: participant.displayName,
+      },
     };
   }
 
-  async unbanParticipant(meetingId: string, userIdToUnban: string, hostId: string) {
+  async unbanParticipant(
+    meetingId: string,
+    userIdToUnban: string,
+    hostId: string,
+  ) {
     // Verify the user is the host of the meeting (either original or current host)
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting || !MeetingUtils.isCurrentMeetingHost(meeting, hostId)) {
@@ -343,15 +366,17 @@ export class ParticipantService {
 
     // Remove user from ban list
     const bannedUserIds = meeting.bannedUserIds || [];
-    const updatedBannedUserIds = bannedUserIds.filter(id => id !== userIdToUnban);
-    
+    const updatedBannedUserIds = bannedUserIds.filter(
+      (id) => id !== userIdToUnban,
+    );
+
     await this.meetingModel.findByIdAndUpdate(meetingId, {
       bannedUserIds: updatedBannedUserIds,
     });
 
-    return { 
-      success: true, 
-      message: 'Participant unbanned and can now rejoin' 
+    return {
+      success: true,
+      message: 'Participant unbanned and can now rejoin',
     };
   }
 
@@ -368,7 +393,8 @@ export class ParticipantService {
 
     // Verify the user is the host or the participant themselves
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && MeetingUtils.isCurrentMeetingHost(meeting, userId);
+    const isHost =
+      meeting && MeetingUtils.isCurrentMeetingHost(meeting, userId);
     const isOwner =
       participant.userId && participant.userId.toString() === userId;
 
@@ -381,17 +407,18 @@ export class ParticipantService {
     return participant;
   }
 
-  async joinMeeting(joinInput: JoinParticipantInput, userId?: string, clientIp?: string) {
-
+  async joinMeeting(
+    joinInput: JoinParticipantInput,
+    userId?: string,
+    clientIp?: string,
+  ) {
     const { meetingId, displayName, inviteCode } = joinInput;
-
 
     // Verify the meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
-
 
     // Check if meeting is active
     if (meeting.status === 'ENDED') {
@@ -404,21 +431,27 @@ export class ParticipantService {
     }
 
     // Check if user is banned from this meeting
-    if (userId && meeting.bannedUserIds && meeting.bannedUserIds.includes(userId)) {
-      throw new ForbiddenException('You have been removed from this meeting and cannot rejoin');
+    if (
+      userId &&
+      meeting.bannedUserIds &&
+      meeting.bannedUserIds.includes(userId)
+    ) {
+      throw new ForbiddenException(
+        'You have been removed from this meeting and cannot rejoin',
+      );
     }
 
     // Determine if participant should go to waiting room
     // 🔧 FIX: Check both original host (hostId) and current host (currentHostId)
     const isOriginalHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
-    const isCurrentHost = meeting.currentHostId ? MeetingUtils.isMeetingHost(meeting.currentHostId, userId) : false;
+    const isCurrentHost = meeting.currentHostId
+      ? MeetingUtils.isMeetingHost(meeting.currentHostId, userId)
+      : false;
     const isHost = isOriginalHost || isCurrentHost; // User is host if they are either original or current host
 
     // Hosts always get admitted directly, others go to waiting room if meeting not started
     const shouldGoToWaitingRoom =
       !isHost && meeting.status !== MeetingStatus.LIVE;
-
-
 
     // Get user info to use real display name
     let realDisplayName = displayName || 'Anonymous';
@@ -441,7 +474,6 @@ export class ParticipantService {
       });
 
       if (existingParticipant) {
-
         // Always refresh display name
         existingParticipant.displayName = realDisplayName;
 
@@ -459,7 +491,9 @@ export class ParticipantService {
 
           // Increment count if they weren't already admitted
           if (prevStatus !== ParticipantStatus.ADMITTED) {
-            await this.meetingModel.findByIdAndUpdate(meetingId, { $inc: { participantCount: 1 } });
+            await this.meetingModel.findByIdAndUpdate(meetingId, {
+              $inc: { participantCount: 1 },
+            });
           }
         } else {
           // Non-host behavior
@@ -478,7 +512,9 @@ export class ParticipantService {
 
             // Increment count if they weren't already admitted
             if (prevStatus !== ParticipantStatus.ADMITTED) {
-              await this.meetingModel.findByIdAndUpdate(meetingId, { $inc: { participantCount: 1 } });
+              await this.meetingModel.findByIdAndUpdate(meetingId, {
+                $inc: { participantCount: 1 },
+              });
             }
           }
         }
@@ -492,14 +528,13 @@ export class ParticipantService {
       }
     }
 
-
     // Determine participant role based on whether user is the host
     const participantRole = isHost ? 'HOST' : 'PARTICIPANT';
 
-
     // Determine initial status based on waiting room logic
-    const initialStatus = shouldGoToWaitingRoom ? ParticipantStatus.WAITING : ParticipantStatus.ADMITTED;
-
+    const initialStatus = shouldGoToWaitingRoom
+      ? ParticipantStatus.WAITING
+      : ParticipantStatus.ADMITTED;
 
     // Create new participant with appropriate status
     const newParticipant = new this.participantModel({
@@ -509,11 +544,16 @@ export class ParticipantService {
       role: participantRole,
       status: initialStatus,
       ipAddress: normalizedClientIp,
-      sessions: initialStatus === ParticipantStatus.ADMITTED ? [{
-        joinedAt: new Date(),
-        leftAt: undefined,
-        durationSec: 0,
-      }] : [], // Only add session if admitted directly
+      sessions:
+        initialStatus === ParticipantStatus.ADMITTED
+          ? [
+              {
+                joinedAt: new Date(),
+                leftAt: undefined,
+                durationSec: 0,
+              },
+            ]
+          : [], // Only add session if admitted directly
     });
 
     const savedParticipant = await newParticipant.save();
@@ -526,13 +566,11 @@ export class ParticipantService {
     } else {
     }
 
-
     return savedParticipant;
   }
 
   async leaveMeeting(leaveInput: LeaveMeetingInput, userId?: string) {
     const { participantId } = leaveInput;
-
 
     // Find the participant
     const participant = await this.participantModel.findById(participantId);
@@ -542,24 +580,26 @@ export class ParticipantService {
 
     // Verify the user owns this participant or is the host
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const hostId = meeting?.hostId?._id ? meeting.hostId._id.toString() : meeting?.hostId?.toString();
+    const hostId = meeting?.hostId?._id
+      ? meeting.hostId._id.toString()
+      : meeting?.hostId?.toString();
     const isHost = meeting && hostId && hostId === userId?.toString();
 
     // Fix: check both by userId (Member) and participantId (Participant doc)
     const isOwner =
-      participant.userId && participant.userId.toString() === userId?.toString();
+      participant.userId &&
+      participant.userId.toString() === userId?.toString();
     const isSelf = participant._id.toString() === participantId.toString();
 
     if (!isHost && !isOwner && !isSelf) {
       throw new ForbiddenException('You can only leave your own participation');
     }
 
-
     // ✅ FIX BUG #5: Update the last session with leave time, prevent double counting
     const sessions = participant.sessions || [];
     if (sessions.length > 0) {
       const lastSession = sessions[sessions.length - 1];
-      
+
       // ✅ FIX: Check if session is already closed to prevent double counting
       if (lastSession.leftAt) {
         // Session already closed, don't process again
@@ -568,20 +608,25 @@ export class ParticipantService {
         const durationSec = Math.floor(
           (now.getTime() - lastSession.joinedAt.getTime()) / 1000,
         );
-        
+
         // 🔧 FIX: Only update if duration is positive (prevent invalid sessions)
         if (durationSec >= 0) {
           lastSession.leftAt = now;
           lastSession.durationSec = durationSec;
-          
+
           // ✅ FIX BUG #4: Prevent double counting - only add if not already counted
           // Check if this duration was already added to totalDurationSec
           const previousTotal = participant.totalDurationSec || 0;
           // Count all closed sessions including those with durationSec = 0
           const sessionSum = sessions
-            .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+            .filter(
+              (s) =>
+                s.leftAt &&
+                s.durationSec !== undefined &&
+                s.durationSec !== null,
+            )
             .reduce((sum, s) => sum + (s.durationSec || 0), 0);
-          
+
           // Only add if this session's duration wasn't already counted
           // Note: We compare sessionSum (sum of all closed sessions) with previousTotal (stored total)
           // If they're equal or previousTotal is less, the new duration wasn't counted yet
@@ -606,44 +651,66 @@ export class ParticipantService {
     const updatedMeeting = await this.meetingModel.findByIdAndUpdate(
       participant.meetingId,
       { $inc: { participantCount: -1 } },
-      { new: true } // Return updated document
+      { new: true }, // Return updated document
     );
-    
+
     // ✅ AUTO-END: If participant count reaches 0, automatically end the meeting
     // ✅ FIX: Add delay to allow for reconnections before auto-ending
-    if (updatedMeeting && updatedMeeting.participantCount <= 0 && updatedMeeting.status === MeetingStatus.LIVE) {
+    if (
+      updatedMeeting &&
+      updatedMeeting.participantCount <= 0 &&
+      updatedMeeting.status === MeetingStatus.LIVE
+    ) {
       // Wait 5 seconds to allow reconnections
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+
       // Re-check after delay
-      const recheckMeeting = await this.meetingModel.findById(participant.meetingId);
-      if (recheckMeeting && recheckMeeting.participantCount <= 0 && recheckMeeting.status === MeetingStatus.LIVE) {
-        this.logger.log(`[LEAVE_MEETING] Participant count reached 0 - Auto-ending meeting ${participant.meetingId}`);
+      const recheckMeeting = await this.meetingModel.findById(
+        participant.meetingId,
+      );
+      if (
+        recheckMeeting &&
+        recheckMeeting.participantCount <= 0 &&
+        recheckMeeting.status === MeetingStatus.LIVE
+      ) {
+        this.logger.log(
+          `[LEAVE_MEETING] Participant count reached 0 - Auto-ending meeting ${participant.meetingId}`,
+        );
         recheckMeeting.status = MeetingStatus.ENDED;
         recheckMeeting.endedAt = new Date();
-        
+
         if (recheckMeeting.actualStartAt) {
           const durationMin = Math.floor(
-            (recheckMeeting.endedAt.getTime() - recheckMeeting.actualStartAt.getTime()) / 60000
+            (recheckMeeting.endedAt.getTime() -
+              recheckMeeting.actualStartAt.getTime()) /
+              60000,
           );
           recheckMeeting.durationMin = durationMin;
         }
-        
+
         await recheckMeeting.save();
-        this.logger.log(`[LEAVE_MEETING] Meeting ${participant.meetingId} auto-ended due to zero participants`);
-        
+        this.logger.log(
+          `[LEAVE_MEETING] Meeting ${participant.meetingId} auto-ended due to zero participants`,
+        );
+
         // ✅ FIX: Notify frontend via event emitter
         if ((global as any).meetingEndEmitter) {
-          (global as any).meetingEndEmitter.emit('meetingEnded', participant.meetingId);
+          (global as any).meetingEndEmitter.emit(
+            'meetingEnded',
+            participant.meetingId,
+          );
         }
       } else {
-        this.logger.log(`[LEAVE_MEETING] Meeting ${participant.meetingId} participant count recovered, not ending`);
+        this.logger.log(
+          `[LEAVE_MEETING] Meeting ${participant.meetingId} participant count recovered, not ending`,
+        );
       }
     }
-    
+
     // 🔧 DEBUG: Verify the status was actually saved
-    const updatedParticipant = await this.participantModel.findById(participantId);
-    
+    const updatedParticipant =
+      await this.participantModel.findById(participantId);
+
     return { message: 'Successfully left the meeting' };
   }
 
@@ -658,7 +725,8 @@ export class ParticipantService {
 
     // Verify the user owns this participant or is the host
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && MeetingUtils.isMeetingHost(meeting.hostId, userId);
+    const isHost =
+      meeting && MeetingUtils.isMeetingHost(meeting.hostId, userId);
     const isOwner =
       participant.userId && participant.userId.toString() === userId;
 
@@ -690,13 +758,18 @@ export class ParticipantService {
             (now.getTime() - lastSession.joinedAt.getTime()) / 1000,
           );
           lastSession.durationSec = durationSec;
-          
+
           // ✅ Prevent double counting - include sessions with durationSec = 0
           const previousTotal = participant.totalDurationSec || 0;
           const sessionSum = sessions
-            .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+            .filter(
+              (s) =>
+                s.leftAt &&
+                s.durationSec !== undefined &&
+                s.durationSec !== null,
+            )
             .reduce((sum, s) => sum + (s.durationSec || 0), 0);
-          
+
           if (sessionSum <= previousTotal) {
             participant.totalDurationSec = previousTotal + durationSec;
           }
@@ -760,7 +833,6 @@ export class ParticipantService {
       },
     };
   }
-
 
   async getWaitingRoomStats(meetingId: string, userId: string) {
     // Verify the meeting exists
@@ -888,7 +960,6 @@ export class ParticipantService {
       role: { $in: [Role.HOST, Role.CO_HOST] },
     });
 
-
     if (!hostParticipant) {
       throw new ForbiddenException(
         'Only hosts and co-hosts can force mute participants',
@@ -1006,7 +1077,13 @@ export class ParticipantService {
   async transferHost(
     input: TransferHostInput,
     currentHostId: string,
-  ): Promise<{ success: boolean; message: string; newHostId: string; newHostParticipantId: string; newLiveKitToken?: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    newHostId: string;
+    newHostParticipantId: string;
+    newLiveKitToken?: string;
+  }> {
     const { meetingId, newHostParticipantId, reason } = input;
 
     const meeting = await this.meetingModel.findById(meetingId);
@@ -1029,18 +1106,32 @@ export class ParticipantService {
       userFromDB: user,
       userFromDBId: user._id,
       userFromDBIdType: typeof user._id,
-      userFromDBIdString: user._id?.toString()
+      userFromDBIdString: user._id?.toString(),
     });
 
     // 🔍 CRITICAL DEBUG: Test the comparison logic directly
-    const directComparison = meeting.hostId?.toString() === currentHostId?.toString();
-    const utilityComparison = MeetingUtils.isMeetingHost(meeting.hostId, currentHostId);
-    
-    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Direct comparison: ${directComparison}`);
-    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Utility comparison: ${utilityComparison}`);
-    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Meeting hostId: ${meeting.hostId?.toString()}`);
-    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Current hostId: ${currentHostId?.toString()}`);
-    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Are they equal? ${meeting.hostId?.toString() === currentHostId?.toString()}`);
+    const directComparison =
+      meeting.hostId?.toString() === currentHostId?.toString();
+    const utilityComparison = MeetingUtils.isMeetingHost(
+      meeting.hostId,
+      currentHostId,
+    );
+
+    this.logger.warn(
+      `[TRANSFER_HOST] CRITICAL DEBUG - Direct comparison: ${directComparison}`,
+    );
+    this.logger.warn(
+      `[TRANSFER_HOST] CRITICAL DEBUG - Utility comparison: ${utilityComparison}`,
+    );
+    this.logger.warn(
+      `[TRANSFER_HOST] CRITICAL DEBUG - Meeting hostId: ${meeting.hostId?.toString()}`,
+    );
+    this.logger.warn(
+      `[TRANSFER_HOST] CRITICAL DEBUG - Current hostId: ${currentHostId?.toString()}`,
+    );
+    this.logger.warn(
+      `[TRANSFER_HOST] CRITICAL DEBUG - Are they equal? ${meeting.hostId?.toString() === currentHostId?.toString()}`,
+    );
 
     const hostValidation = await HostValidationUtil.validateHost(
       meeting.hostId,
@@ -1048,44 +1139,64 @@ export class ParticipantService {
       user.systemRole,
       this.participantModel,
       meetingId,
-      meeting.currentHostId // Pass currentHostId for transferred host support
+      meeting.currentHostId, // Pass currentHostId for transferred host support
     );
 
-    this.logger.debug(`[TRANSFER_HOST] Host validation result:`, hostValidation);
-    
+    this.logger.debug(
+      `[TRANSFER_HOST] Host validation result:`,
+      hostValidation,
+    );
+
     if (!hostValidation.isAuthorized) {
-      this.logger.warn(`[TRANSFER_HOST] Failed - User ${currentHostId} is not authorized to transfer host role. Reason: ${hostValidation.reason}`);
-      throw new ForbiddenException('Only the current host can transfer host role');
+      this.logger.warn(
+        `[TRANSFER_HOST] Failed - User ${currentHostId} is not authorized to transfer host role. Reason: ${hostValidation.reason}`,
+      );
+      throw new ForbiddenException(
+        'Only the current host can transfer host role',
+      );
     }
 
-    this.logger.debug(`[TRANSFER_HOST] Looking for new host participant - meetingId: ${meetingId}, newHostParticipantId: ${newHostParticipantId}`);
+    this.logger.debug(
+      `[TRANSFER_HOST] Looking for new host participant - meetingId: ${meetingId}, newHostParticipantId: ${newHostParticipantId}`,
+    );
 
     const newHostParticipant = await this.participantModel.findOne({
       _id: new Types.ObjectId(newHostParticipantId),
       meetingId: new Types.ObjectId(meetingId),
     });
-    
+
     this.logger.debug(`[TRANSFER_HOST] New host participant search result:`, {
       found: !!newHostParticipant,
       participantId: newHostParticipant?._id,
       participantUserId: newHostParticipant?.userId,
       participantRole: newHostParticipant?.role,
-      participantStatus: newHostParticipant?.status
+      participantStatus: newHostParticipant?.status,
     });
-    
-    if (!newHostParticipant) throw new NotFoundException('New host participant not found');
-    
+
+    if (!newHostParticipant)
+      throw new NotFoundException('New host participant not found');
+
     // 🔧 FIX: Validate that the new host participant is active (not LEFT)
     if (newHostParticipant.status === ParticipantStatus.LEFT) {
-      throw new BadRequestException('Cannot transfer host role to a participant who has left the meeting');
-    }
-    
-    // 🔧 FIX: Validate that the new host participant is admitted/approved
-    if (![ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED].includes(newHostParticipant.status)) {
-      throw new BadRequestException('Cannot transfer host role to a participant who is not actively in the meeting');
+      throw new BadRequestException(
+        'Cannot transfer host role to a participant who has left the meeting',
+      );
     }
 
-    const newHostUser = await this.memberModel.findById(newHostParticipant.userId);
+    // 🔧 FIX: Validate that the new host participant is admitted/approved
+    if (
+      ![ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED].includes(
+        newHostParticipant.status,
+      )
+    ) {
+      throw new BadRequestException(
+        'Cannot transfer host role to a participant who is not actively in the meeting',
+      );
+    }
+
+    const newHostUser = await this.memberModel.findById(
+      newHostParticipant.userId,
+    );
     if (!newHostUser) throw new ForbiddenException('New host user not found');
 
     // Find current host participant to demote
@@ -1093,21 +1204,26 @@ export class ParticipantService {
       meetingId: new Types.ObjectId(meetingId),
       $or: [
         { userId: new Types.ObjectId(currentHostId) },
-        { 'userId._id': new Types.ObjectId(currentHostId) }
+        { 'userId._id': new Types.ObjectId(currentHostId) },
       ],
       role: Role.HOST,
     });
 
     // Demote current host, promote new host
     if (currentHostParticipant) {
-      await this.participantModel.findByIdAndUpdate(currentHostParticipant._id, { role: Role.PARTICIPANT });
+      await this.participantModel.findByIdAndUpdate(
+        currentHostParticipant._id,
+        { role: Role.PARTICIPANT },
+      );
     }
-    await this.participantModel.findByIdAndUpdate(newHostParticipantId, { role: Role.HOST });
+    await this.participantModel.findByIdAndUpdate(newHostParticipantId, {
+      role: Role.HOST,
+    });
 
     // 🔧 SOLUTION 1: Update currentHostId instead of hostId to preserve original tutor
     // hostId remains as original tutor, currentHostId tracks current meeting host
-    await this.meetingModel.findByIdAndUpdate(meetingId, { 
-      currentHostId: newHostParticipant.userId 
+    await this.meetingModel.findByIdAndUpdate(meetingId, {
+      currentHostId: newHostParticipant.userId,
     });
 
     // ✅ Generate new LiveKit token for new host with elevated permissions
@@ -1115,14 +1231,19 @@ export class ParticipantService {
     try {
       const token = await this.livekitService.generateAccessToken({
         room: meetingId,
-        identity: newHostParticipant.userId?.toString() || newHostUser._id?.toString(),
+        identity:
+          newHostParticipant.userId?.toString() || newHostUser._id?.toString(),
         name: newHostUser.displayName || newHostUser.email || 'Host',
         meetingRole: 'HOST' as any,
       });
       newLiveKitToken = token;
-      this.logger.log(`[TRANSFER_HOST] Generated new LiveKit token for new host: ${newHostParticipant.userId}`);
+      this.logger.log(
+        `[TRANSFER_HOST] Generated new LiveKit token for new host: ${newHostParticipant.userId}`,
+      );
     } catch (error) {
-      this.logger.error(`[TRANSFER_HOST] Failed to generate LiveKit token: ${error.message}`);
+      this.logger.error(
+        `[TRANSFER_HOST] Failed to generate LiveKit token: ${error.message}`,
+      );
       // Continue with transfer even if token generation fails
     }
 
@@ -1134,7 +1255,6 @@ export class ParticipantService {
       newLiveKitToken, // ✅ Return token for WebSocket emission
     };
   }
-
 
   // Check if user can be host (TUTOR or ADMIN only)
   async canBeHost(userId: string): Promise<boolean> {
@@ -1151,7 +1271,6 @@ export class ParticipantService {
     meetingId: string,
     requesterId: string,
   ): Promise<any> {
-    
     // Verify meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
@@ -1169,8 +1288,10 @@ export class ParticipantService {
     // 2. If requester is the current host
     // 3. If requester is a tutor and this is their course
     // 4. If requester is an admin (temporary bypass for testing)
-    const isOriginalHost = meeting.hostId?.toString() === requesterId?.toString();
-    const isCurrentHost = meeting.currentHostId?.toString() === requesterId?.toString();
+    const isOriginalHost =
+      meeting.hostId?.toString() === requesterId?.toString();
+    const isCurrentHost =
+      meeting.currentHostId?.toString() === requesterId?.toString();
     const isTutor = requester.systemRole === SystemRole.TUTOR && isOriginalHost;
     const isAdmin = requester.systemRole === SystemRole.ADMIN;
 
@@ -1179,33 +1300,48 @@ export class ParticipantService {
     // TEMPORARY: Allow any authenticated user to view attendance for testing
     // TODO: Remove this in production
     const isAuthenticatedUser = !!requesterId;
-    
-    if (!isOriginalHost && !isCurrentHost && !isTutor && !isAdmin && !isAuthenticatedUser) {
+
+    if (
+      !isOriginalHost &&
+      !isCurrentHost &&
+      !isTutor &&
+      !isAdmin &&
+      !isAuthenticatedUser
+    ) {
       throw new ForbiddenException(
         'Only meeting hosts and tutors can view attendance for their own courses',
       );
     }
-    
-    if (isAuthenticatedUser && !isOriginalHost && !isCurrentHost && !isTutor && !isAdmin) {
+
+    if (
+      isAuthenticatedUser &&
+      !isOriginalHost &&
+      !isCurrentHost &&
+      !isTutor &&
+      !isAdmin
+    ) {
     }
 
     // Get all participants with their session data
-    
+
     // Convert string meetingId to ObjectId if needed
     const ObjectId = require('mongoose').Types.ObjectId;
-    const meetingIdObj = ObjectId.isValid(meetingId) ? new ObjectId(meetingId) : meetingId;
-    
+    const meetingIdObj = ObjectId.isValid(meetingId)
+      ? new ObjectId(meetingId)
+      : meetingId;
+
     const participants = await this.participantModel
       .find({ meetingId: meetingIdObj })
-      .populate('userId', 'email displayName firstName lastName systemRole avatarUrl organization department')
+      .populate(
+        'userId',
+        'email displayName firstName lastName systemRole avatarUrl organization department',
+      )
       .sort({ createdAt: 1 })
       .lean();
-    
-
 
     // Calculate attendance data
     const attendanceData = participants
-      .filter(participant => {
+      .filter((participant) => {
         // Only filter out completely invalid participants
         if (!participant || !participant._id) return false;
         // Keep all participants including those without userId (guests, deleted users)
@@ -1214,29 +1350,34 @@ export class ParticipantService {
       .map((participant) => {
         try {
           const sessions = participant.sessions || [];
-          
+
           // 🔧 FIX: Filter out invalid sessions (where leftAt < joinedAt, or null sessions)
-          const validSessions = sessions.filter(session => {
+          const validSessions = sessions.filter((session) => {
             // ✅ CRITICAL FIX: Remove null/undefined sessions
             if (!session) {
               return false;
             }
             if (!session.joinedAt) return false;
             if (!session.leftAt) return true; // Currently active session is valid
-            
+
             const joinedTime = new Date(session.joinedAt).getTime();
             const leftTime = new Date(session.leftAt).getTime();
             return leftTime >= joinedTime; // Only keep sessions where leftAt >= joinedAt
           });
-          
+
           // ✅ FIX BUG #1: Use saved durationSec first, recalculate only if missing or invalid
           const totalDuration = validSessions.reduce((total, session) => {
             if (!session || !session.joinedAt) return total;
-            
+
             let sessionDurationSec = 0;
-            
+
             // ✅ PRIORITY 1: Use saved durationSec if it exists (>= 0, can be 0 for instant leaves) and session is closed
-            if (session.durationSec !== undefined && session.durationSec !== null && session.durationSec >= 0 && session.leftAt) {
+            if (
+              session.durationSec !== undefined &&
+              session.durationSec !== null &&
+              session.durationSec >= 0 &&
+              session.leftAt
+            ) {
               // Session is closed and has a saved duration - use it (most accurate)
               // Note: durationSec can be 0 if participant left immediately
               sessionDurationSec = session.durationSec;
@@ -1251,18 +1392,20 @@ export class ParticipantService {
                 const date = new Date(dateValue);
                 return isNaN(date.getTime()) ? 0 : date.getTime();
               };
-              
+
               const joinedTime = getTimestamp(session.joinedAt);
-              
+
               if (!joinedTime) {
                 return total;
               }
-              
+
               if (session.leftAt) {
                 // Session is closed but durationSec missing - recalculate from timestamps
                 const leftTime = getTimestamp(session.leftAt);
                 if (leftTime && leftTime >= joinedTime) {
-                  sessionDurationSec = Math.floor((leftTime - joinedTime) / 1000);
+                  sessionDurationSec = Math.floor(
+                    (leftTime - joinedTime) / 1000,
+                  );
                 }
               } else {
                 // ✅ FIX BUG #3: Session still active - calculate current duration
@@ -1271,15 +1414,19 @@ export class ParticipantService {
                 sessionDurationSec = Math.floor((now - joinedTime) / 1000);
               }
             }
-            
+
             return total + Math.max(0, sessionDurationSec); // Ensure non-negative
           }, 0);
 
           // ✅ FIX BUG #4: Validation - Verify totalDuration matches calculated sum (for debugging)
           // If totalDurationSec exists but doesn't match calculated sum, log warning but use calculated value
-          if (participant.totalDurationSec && participant.totalDurationSec !== totalDuration) {
+          if (
+            participant.totalDurationSec &&
+            participant.totalDurationSec !== totalDuration
+          ) {
             const diff = Math.abs(participant.totalDurationSec - totalDuration);
-            if (diff > 5) { // Only warn if difference is significant (> 5 seconds)
+            if (diff > 5) {
+              // Only warn if difference is significant (> 5 seconds)
               // Use calculated value as it's more accurate (sums from session.durationSec)
               // Don't update participant.totalDurationSec here to avoid race conditions
             }
@@ -1288,7 +1435,11 @@ export class ParticipantService {
           // ✅ SAFER: Handle case where populate failed (user deleted)
           let userData = null;
           try {
-            if (participant.userId && typeof participant.userId === 'object' && !participant.userId.constructor.name.includes('ObjectId')) {
+            if (
+              participant.userId &&
+              typeof participant.userId === 'object' &&
+              !participant.userId.constructor.name.includes('ObjectId')
+            ) {
               const userId = participant.userId as any;
               userData = {
                 _id: userId?._id,
@@ -1308,14 +1459,28 @@ export class ParticipantService {
           }
 
           // Get first join time from sessions or fallback to createdAt
-          const firstJoinedAt = validSessions.length > 0 && validSessions[0]?.joinedAt
-            ? (typeof validSessions[0].joinedAt === 'string' ? validSessions[0].joinedAt : new Date(validSessions[0].joinedAt).toISOString())
-            : (participant.createdAt ? (typeof participant.createdAt === 'string' ? participant.createdAt : new Date(participant.createdAt).toISOString()) : new Date().toISOString());
+          const firstJoinedAt =
+            validSessions.length > 0 && validSessions[0]?.joinedAt
+              ? typeof validSessions[0].joinedAt === 'string'
+                ? validSessions[0].joinedAt
+                : new Date(validSessions[0].joinedAt).toISOString()
+              : participant.createdAt
+                ? typeof participant.createdAt === 'string'
+                  ? participant.createdAt
+                  : new Date(participant.createdAt).toISOString()
+                : new Date().toISOString();
 
           // Get last leave time
-          const lastLeftAt = validSessions.length > 0 && validSessions[validSessions.length - 1]?.leftAt
-            ? (typeof validSessions[validSessions.length - 1].leftAt === 'string' ? validSessions[validSessions.length - 1].leftAt : new Date(validSessions[validSessions.length - 1].leftAt).toISOString())
-            : null;
+          const lastLeftAt =
+            validSessions.length > 0 &&
+            validSessions[validSessions.length - 1]?.leftAt
+              ? typeof validSessions[validSessions.length - 1].leftAt ===
+                'string'
+                ? validSessions[validSessions.length - 1].leftAt
+                : new Date(
+                    validSessions[validSessions.length - 1].leftAt,
+                  ).toISOString()
+              : null;
 
           // Extract userId - handle both populated and unpopulated cases
           let userIdString: string | null = null;
@@ -1333,7 +1498,10 @@ export class ParticipantService {
           return {
             _id: participant._id || 'unknown',
             userId: userIdString,
-            displayName: userData?.displayName || participant.displayName || 'Unknown User',
+            displayName:
+              userData?.displayName ||
+              participant.displayName ||
+              'Unknown User',
             email: userData?.email || null,
             firstName: userData?.firstName || null,
             lastName: userData?.lastName || null,
@@ -1344,62 +1512,113 @@ export class ParticipantService {
             ipAddress: participant.ipAddress || null,
             role: participant.role || 'PARTICIPANT',
             status: participant.status || 'UNKNOWN',
-            joinedAt: typeof firstJoinedAt === 'string' ? new Date(firstJoinedAt) : (firstJoinedAt || new Date()),
-            leftAt: lastLeftAt ? (typeof lastLeftAt === 'string' ? new Date(lastLeftAt) : lastLeftAt) : null,
+            joinedAt:
+              typeof firstJoinedAt === 'string'
+                ? new Date(firstJoinedAt)
+                : firstJoinedAt || new Date(),
+            leftAt: lastLeftAt
+              ? typeof lastLeftAt === 'string'
+                ? new Date(lastLeftAt)
+                : lastLeftAt
+              : null,
             totalTime: totalDuration,
             sessionCount: validSessions.length,
-            isCurrentlyOnline: validSessions.length > 0 && !validSessions[validSessions.length - 1]?.leftAt,
+            isCurrentlyOnline:
+              validSessions.length > 0 &&
+              !validSessions[validSessions.length - 1]?.leftAt,
             micState: participant.micState || 'OFF',
             cameraState: participant.cameraState || 'OFF',
             hasHandRaised: participant.hasHandRaised || false,
-            handRaisedAt: participant.handRaisedAt ? (typeof participant.handRaisedAt === 'string' ? new Date(participant.handRaisedAt) : participant.handRaisedAt) : null,
-            handLoweredAt: participant.handLoweredAt ? (typeof participant.handLoweredAt === 'string' ? new Date(participant.handLoweredAt) : participant.handLoweredAt) : null,
+            handRaisedAt: participant.handRaisedAt
+              ? typeof participant.handRaisedAt === 'string'
+                ? new Date(participant.handRaisedAt)
+                : participant.handRaisedAt
+              : null,
+            handLoweredAt: participant.handLoweredAt
+              ? typeof participant.handLoweredAt === 'string'
+                ? new Date(participant.handLoweredAt)
+                : participant.handLoweredAt
+              : null,
             // ✅ FIX BUG #2: Use saved durationSec in session mapping, recalculate only if missing
-            sessions: validSessions.map((session) => {
-              if (!session || !session.joinedAt) return null;
-              
-              // Convert to Date objects for GraphQL DateTime scalar
-              const joinedAt = typeof session.joinedAt === 'string' ? new Date(session.joinedAt) : session.joinedAt;
-              const leftAt = session.leftAt ? (typeof session.leftAt === 'string' ? new Date(session.leftAt) : session.leftAt) : null;
-              
-              // Use saved durationSec if available (can be 0 for instant leaves), otherwise recalculate
-              let durationSec = session.durationSec;
-              if (durationSec === undefined || durationSec === null || durationSec < 0) {
-                // Only recalculate if durationSec is missing or invalid (negative)
-                // durationSec = 0 is valid (participant left immediately)
-                if (leftAt) {
-                  // Closed session - recalculate from timestamps
-                  durationSec = Math.floor((new Date(leftAt).getTime() - new Date(joinedAt).getTime()) / 1000);
-                } else {
-                  // Active session - calculate current duration
-                  durationSec = Math.floor((Date.now() - new Date(joinedAt).getTime()) / 1000);
+            sessions: validSessions
+              .map((session) => {
+                if (!session || !session.joinedAt) return null;
+
+                // Convert to Date objects for GraphQL DateTime scalar
+                const joinedAt =
+                  typeof session.joinedAt === 'string'
+                    ? new Date(session.joinedAt)
+                    : session.joinedAt;
+                const leftAt = session.leftAt
+                  ? typeof session.leftAt === 'string'
+                    ? new Date(session.leftAt)
+                    : session.leftAt
+                  : null;
+
+                // Use saved durationSec if available (can be 0 for instant leaves), otherwise recalculate
+                let durationSec = session.durationSec;
+                if (
+                  durationSec === undefined ||
+                  durationSec === null ||
+                  durationSec < 0
+                ) {
+                  // Only recalculate if durationSec is missing or invalid (negative)
+                  // durationSec = 0 is valid (participant left immediately)
+                  if (leftAt) {
+                    // Closed session - recalculate from timestamps
+                    durationSec = Math.floor(
+                      (new Date(leftAt).getTime() -
+                        new Date(joinedAt).getTime()) /
+                        1000,
+                    );
+                  } else {
+                    // Active session - calculate current duration
+                    durationSec = Math.floor(
+                      (Date.now() - new Date(joinedAt).getTime()) / 1000,
+                    );
+                  }
                 }
-              }
-              
-              return {
-                joinedAt: joinedAt,
-                leftAt: leftAt,
-                durationSec: Math.max(0, durationSec), // Ensure non-negative
-              };
-            }).filter(s => s !== null), // Remove null entries
+
+                return {
+                  joinedAt: joinedAt,
+                  leftAt: leftAt,
+                  durationSec: Math.max(0, durationSec), // Ensure non-negative
+                };
+              })
+              .filter((s) => s !== null), // Remove null entries
           };
         } catch (error) {
           return null;
         }
       })
-      .filter(p => p !== null); // Remove any null entries from errors
+      .filter((p) => p !== null); // Remove any null entries from errors
 
-    attendanceData.forEach((p, idx) => {
-    });
+    attendanceData.forEach((p, idx) => {});
 
-    const presentParticipants = attendanceData.filter(p => p.status === ParticipantStatus.ADMITTED || p.status === ParticipantStatus.APPROVED).length;
-    const totalMeetingDuration = meeting.endedAt && meeting.actualStartAt 
-      ? Math.floor((new Date(meeting.endedAt).getTime() - new Date(meeting.actualStartAt).getTime()) / 1000)
-      : 0;
-    const averageAttendanceTime = attendanceData.length > 0 
-      ? Math.floor(attendanceData.reduce((sum, p) => sum + p.totalTime, 0) / attendanceData.length)
-      : 0;
-    const attendanceRate = participants.length > 0 ? Math.round((presentParticipants / participants.length) * 100) : 0;
+    const presentParticipants = attendanceData.filter(
+      (p) =>
+        p.status === ParticipantStatus.ADMITTED ||
+        p.status === ParticipantStatus.APPROVED,
+    ).length;
+    const totalMeetingDuration =
+      meeting.endedAt && meeting.actualStartAt
+        ? Math.floor(
+            (new Date(meeting.endedAt).getTime() -
+              new Date(meeting.actualStartAt).getTime()) /
+              1000,
+          )
+        : 0;
+    const averageAttendanceTime =
+      attendanceData.length > 0
+        ? Math.floor(
+            attendanceData.reduce((sum, p) => sum + p.totalTime, 0) /
+              attendanceData.length,
+          )
+        : 0;
+    const attendanceRate =
+      participants.length > 0
+        ? Math.round((presentParticipants / participants.length) * 100)
+        : 0;
 
     const result = {
       meetingId,
@@ -1411,7 +1630,6 @@ export class ParticipantService {
       participants: attendanceData,
     };
 
-    
     // Log the first participant in detail
     if (result.participants.length > 0) {
     }
@@ -1426,7 +1644,8 @@ export class ParticipantService {
     input: ForceScreenShareInput,
     hostId: string,
   ): Promise<ScreenShareControlResponse> {
-    const { meetingId, participantId, screenState, reason, screenShareInfo } = input;
+    const { meetingId, participantId, screenState, reason, screenShareInfo } =
+      input;
 
     // Verify meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
@@ -1436,7 +1655,9 @@ export class ParticipantService {
 
     // Verify the user is the host
     if (!MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
-      throw new ForbiddenException('Only the meeting host can control screen sharing');
+      throw new ForbiddenException(
+        'Only the meeting host can control screen sharing',
+      );
     }
 
     // Find the participant
@@ -1486,7 +1707,9 @@ export class ParticipantService {
 
     // Verify the user owns this participant record
     if (participant.userId && participant.userId.toString() !== userId) {
-      throw new ForbiddenException('You can only update your own screen share info');
+      throw new ForbiddenException(
+        'You can only update your own screen share info',
+      );
     }
 
     // Update participant's screen share info
@@ -1531,12 +1754,14 @@ export class ParticipantService {
         userId: new Types.ObjectId(userId),
       });
       if (!userParticipant) {
-        throw new ForbiddenException('You must be the host or a participant to view screen share status');
+        throw new ForbiddenException(
+          'You must be the host or a participant to view screen share status',
+        );
       }
     }
 
     // Build query
-    let query: any = { meetingId };
+    const query: any = { meetingId };
     if (participantId) {
       query._id = new Types.ObjectId(participantId);
     }
@@ -1553,9 +1778,12 @@ export class ParticipantService {
       displayName: p.displayName,
       screenState: p.screenState as MediaState,
       screenShareInfo: p.screenShareInfo,
-      screenShareStartedAt: p.screenState === MediaState.ON ? p.createdAt : undefined,
-      screenShareDuration: p.screenState === MediaState.ON ?
-        Math.floor((Date.now() - p.createdAt.getTime()) / 1000) : undefined,
+      screenShareStartedAt:
+        p.screenState === MediaState.ON ? p.createdAt : undefined,
+      screenShareDuration:
+        p.screenState === MediaState.ON
+          ? Math.floor((Date.now() - p.createdAt.getTime()) / 1000)
+          : undefined,
       isCurrentlySharing: p.screenState === MediaState.ON,
     }));
 
@@ -1587,7 +1815,9 @@ export class ParticipantService {
       screenState: p.screenState as MediaState,
       screenShareInfo: p.screenShareInfo,
       screenShareStartedAt: p.createdAt,
-      screenShareDuration: Math.floor((Date.now() - p.createdAt.getTime()) / 1000),
+      screenShareDuration: Math.floor(
+        (Date.now() - p.createdAt.getTime()) / 1000,
+      ),
       isCurrentlySharing: true,
     }));
   }
@@ -1597,8 +1827,11 @@ export class ParticipantService {
     meetingId: string,
     screenShareInfo: string,
     excludeParticipantId?: string,
-  ): Promise<{ isConflict: boolean; conflictingParticipant?: ScreenShareInfo }> {
-    let query: any = {
+  ): Promise<{
+    isConflict: boolean;
+    conflictingParticipant?: ScreenShareInfo;
+  }> {
+    const query: any = {
       meetingId,
       screenState: MediaState.ON,
       screenShareInfo,
@@ -1622,7 +1855,9 @@ export class ParticipantService {
           screenState: conflictingParticipant.screenState as MediaState,
           screenShareInfo: conflictingParticipant.screenShareInfo,
           screenShareStartedAt: conflictingParticipant.createdAt,
-          screenShareDuration: Math.floor((Date.now() - conflictingParticipant.createdAt.getTime()) / 1000),
+          screenShareDuration: Math.floor(
+            (Date.now() - conflictingParticipant.createdAt.getTime()) / 1000,
+          ),
           isCurrentlySharing: true,
         },
       };
@@ -1634,7 +1869,10 @@ export class ParticipantService {
   // ==================== RAISE HAND METHODS ====================
 
   // Raise hand (participant action)
-  async raiseHand(input: RaiseHandInput, userId: string): Promise<HandRaiseActionResponse> {
+  async raiseHand(
+    input: RaiseHandInput,
+    userId: string,
+  ): Promise<HandRaiseActionResponse> {
     const { participantId, reason } = input;
 
     // Find the participant
@@ -1644,15 +1882,14 @@ export class ParticipantService {
     }
 
     // Verify the user owns this participant record
-    
+
     // Fix: Proper ObjectId comparison
     const participantUserIdStr = participant.userId?.toString();
     const requestedUserIdStr = userId?.toString();
-    
+
     if (participant.userId && participantUserIdStr !== requestedUserIdStr) {
       throw new ForbiddenException('You can only raise your own hand');
     }
-    
 
     // Check if hand is already raised
     if (participant.hasHandRaised) {
@@ -1678,7 +1915,10 @@ export class ParticipantService {
   }
 
   // Lower hand (participant action)
-  async lowerHand(input: LowerHandInput, userId: string): Promise<HandRaiseActionResponse> {
+  async lowerHand(
+    input: LowerHandInput,
+    userId: string,
+  ): Promise<HandRaiseActionResponse> {
     const { participantId, reason } = input;
 
     // Find the participant
@@ -1715,7 +1955,10 @@ export class ParticipantService {
   }
 
   // Host lowers participant's hand
-  async hostLowerHand(input: HostLowerHandInput, hostId: string): Promise<HandRaiseActionResponse> {
+  async hostLowerHand(
+    input: HostLowerHandInput,
+    hostId: string,
+  ): Promise<HandRaiseActionResponse> {
     const { meetingId, participantId, reason } = input;
 
     // Verify meeting exists
@@ -1726,7 +1969,9 @@ export class ParticipantService {
 
     // Verify the user is the host
     if (!MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
-      throw new ForbiddenException('Only the meeting host can lower participants\' hands');
+      throw new ForbiddenException(
+        "Only the meeting host can lower participants' hands",
+      );
     }
 
     // Find the participant
@@ -1742,7 +1987,9 @@ export class ParticipantService {
 
     // Check if hand is raised
     if (!participant.hasHandRaised) {
-      throw new BadRequestException('Participant\'s hand is not currently raised');
+      throw new BadRequestException(
+        "Participant's hand is not currently raised",
+      );
     }
 
     // Lower hand
@@ -1754,7 +2001,7 @@ export class ParticipantService {
 
     return {
       success: true,
-      message: 'Participant\'s hand lowered successfully',
+      message: "Participant's hand lowered successfully",
       participantId,
       hasHandRaised: false,
       handLoweredAt: now,
@@ -1763,7 +2010,10 @@ export class ParticipantService {
   }
 
   // Get all raised hands in a meeting
-  async getRaisedHands(input: GetRaisedHandsInput, userId: string): Promise<RaisedHandsResponse> {
+  async getRaisedHands(
+    input: GetRaisedHandsInput,
+    userId: string,
+  ): Promise<RaisedHandsResponse> {
     const { meetingId, includeLowered } = input;
 
     // Verify meeting exists
@@ -1781,12 +2031,14 @@ export class ParticipantService {
         userId: new Types.ObjectId(userId),
       });
       if (!userParticipant) {
-        throw new ForbiddenException('You must be the host or a participant to view raised hands');
+        throw new ForbiddenException(
+          'You must be the host or a participant to view raised hands',
+        );
       }
     }
 
     // Build query
-    let query: any = { meetingId };
+    const query: any = { meetingId };
     if (!includeLowered) {
       query.hasHandRaised = true;
     }
@@ -1794,14 +2046,18 @@ export class ParticipantService {
     // Get participants with raised hands
     const participants = await this.participantModel
       .find(query)
-      .select('_id displayName hasHandRaised handRaisedAt handLoweredAt createdAt')
+      .select(
+        '_id displayName hasHandRaised handRaisedAt handLoweredAt createdAt',
+      )
       .sort({ handRaisedAt: 1 }) // Sort by when hand was raised (oldest first)
       .lean();
 
     // Transform to hand raise info
     const raisedHands: HandRaiseInfo[] = participants.map((p) => {
-      const handRaiseDuration = p.handRaisedAt && !p.handLoweredAt ?
-        Math.floor((Date.now() - p.handRaisedAt.getTime()) / 1000) : undefined;
+      const handRaiseDuration =
+        p.handRaisedAt && !p.handLoweredAt
+          ? Math.floor((Date.now() - p.handRaisedAt.getTime()) / 1000)
+          : undefined;
 
       return {
         participantId: p._id.toString(),
@@ -1814,7 +2070,9 @@ export class ParticipantService {
       };
     });
 
-    const totalRaisedHands = raisedHands.filter((info) => info.hasHandRaised).length;
+    const totalRaisedHands = raisedHands.filter(
+      (info) => info.hasHandRaised,
+    ).length;
 
     return {
       raisedHands,
@@ -1825,18 +2083,24 @@ export class ParticipantService {
   }
 
   // Get participant's hand raise status
-  async getParticipantHandStatus(participantId: string): Promise<HandRaiseInfo> {
+  async getParticipantHandStatus(
+    participantId: string,
+  ): Promise<HandRaiseInfo> {
     const participant = await this.participantModel
       .findById(participantId)
-      .select('_id displayName hasHandRaised handRaisedAt handLoweredAt createdAt')
+      .select(
+        '_id displayName hasHandRaised handRaisedAt handLoweredAt createdAt',
+      )
       .lean();
 
     if (!participant) {
       throw new NotFoundException('Participant not found');
     }
 
-    const handRaiseDuration = participant.handRaisedAt && !participant.handLoweredAt ?
-      Math.floor((Date.now() - participant.handRaisedAt.getTime()) / 1000) : undefined;
+    const handRaiseDuration =
+      participant.handRaisedAt && !participant.handLoweredAt
+        ? Math.floor((Date.now() - participant.handRaisedAt.getTime()) / 1000)
+        : undefined;
 
     return {
       participantId: participant._id.toString(),
@@ -1850,7 +2114,10 @@ export class ParticipantService {
   }
 
   // Lower all hands in meeting (host action)
-  async lowerAllHands(meetingId: string, hostId: string): Promise<HandRaiseActionResponse[]> {
+  async lowerAllHands(
+    meetingId: string,
+    hostId: string,
+  ): Promise<HandRaiseActionResponse[]> {
     // Verify meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
@@ -1874,14 +2141,14 @@ export class ParticipantService {
 
     // Lower all hands
     const now = new Date();
-    const participantIds = participantsWithRaisedHands.map(p => p._id);
+    const participantIds = participantsWithRaisedHands.map((p) => p._id);
 
     await this.participantModel.updateMany(
       { _id: { $in: participantIds } },
       {
         hasHandRaised: false,
         handLoweredAt: now,
-      }
+      },
     );
 
     // Return results for each participant
@@ -1896,8 +2163,10 @@ export class ParticipantService {
   }
 
   // Update participant media state
-  async updateParticipantMediaState(participantId: string, mediaState: { micState?: MediaState, cameraState?: MediaState }) {
-
+  async updateParticipantMediaState(
+    participantId: string,
+    mediaState: { micState?: MediaState; cameraState?: MediaState },
+  ) {
     const participant = await this.participantModel.findById(participantId);
     if (!participant) {
       throw new NotFoundException('Participant not found');
@@ -1917,12 +2186,12 @@ export class ParticipantService {
 
   // Get participant by user ID and meeting ID
   async getParticipantByUserAndMeeting(userId: string, meetingId: string) {
-
-    const participant = await this.participantModel.findOne({
-      userId: new Types.ObjectId(userId),
-      meetingId: new Types.ObjectId(meetingId)
-    }).populate('userId', 'email displayName systemRole avatarUrl');
-
+    const participant = await this.participantModel
+      .findOne({
+        userId: new Types.ObjectId(userId),
+        meetingId: new Types.ObjectId(meetingId),
+      })
+      .populate('userId', 'email displayName systemRole avatarUrl');
 
     return participant;
   }
@@ -1931,43 +2200,44 @@ export class ParticipantService {
 
   // Get all participants in waiting room for a meeting
   async getWaitingParticipants(meetingId: string, hostUserId: string) {
-
     // Verify the user is the host
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
 
-    const isHost = meeting.hostId &&
-      meeting.hostId.toString() === hostUserId.toString();
+    const isHost =
+      meeting.hostId && meeting.hostId.toString() === hostUserId.toString();
 
     if (!isHost) {
-      throw new ForbiddenException('Only the meeting host can view waiting participants');
+      throw new ForbiddenException(
+        'Only the meeting host can view waiting participants',
+      );
     }
 
     const waitingParticipants = await this.participantModel
       .find({
         meetingId: new Types.ObjectId(meetingId),
-        status: ParticipantStatus.WAITING
+        status: ParticipantStatus.WAITING,
       })
       .populate('userId', 'email displayName systemRole avatarUrl')
       .sort({ createdAt: 1 });
 
     // ✅ FIX: Filter out participants where userId populate failed (user was deleted)
-    const validWaitingParticipants = waitingParticipants.filter(participant => {
-      if (!participant.userId) {
-        return false;
-      }
-      return true;
-    });
-
+    const validWaitingParticipants = waitingParticipants.filter(
+      (participant) => {
+        if (!participant.userId) {
+          return false;
+        }
+        return true;
+      },
+    );
 
     return validWaitingParticipants;
   }
 
   // Approve a participant from waiting room
   async approveParticipant(participantId: string, hostUserId: string) {
-
     const participant = await this.participantModel.findById(participantId);
     if (!participant) {
       throw new NotFoundException('Participant not found');
@@ -1979,11 +2249,13 @@ export class ParticipantService {
       throw new NotFoundException('Meeting not found');
     }
 
-    const isHost = meeting.hostId &&
-      meeting.hostId.toString() === hostUserId.toString();
+    const isHost =
+      meeting.hostId && meeting.hostId.toString() === hostUserId.toString();
 
     if (!isHost) {
-      throw new ForbiddenException('Only the meeting host can approve participants');
+      throw new ForbiddenException(
+        'Only the meeting host can approve participants',
+      );
     }
 
     // Check if participant is in waiting room
@@ -2006,13 +2278,11 @@ export class ParticipantService {
       $inc: { participantCount: 1 },
     });
 
-
     return participant;
   }
 
   // Reject a participant from waiting room
   async rejectParticipant(participantId: string, hostUserId: string) {
-
     const participant = await this.participantModel.findById(participantId);
     if (!participant) {
       throw new NotFoundException('Participant not found');
@@ -2024,11 +2294,13 @@ export class ParticipantService {
       throw new NotFoundException('Meeting not found');
     }
 
-    const isHost = meeting.hostId &&
-      meeting.hostId.toString() === hostUserId.toString();
+    const isHost =
+      meeting.hostId && meeting.hostId.toString() === hostUserId.toString();
 
     if (!isHost) {
-      throw new ForbiddenException('Only the meeting host can reject participants');
+      throw new ForbiddenException(
+        'Only the meeting host can reject participants',
+      );
     }
 
     // Check if participant is in waiting room
@@ -2040,32 +2312,31 @@ export class ParticipantService {
     participant.status = ParticipantStatus.REJECTED;
     await participant.save();
 
-
     return participant;
   }
 
   // Admit all waiting participants (bulk approve)
   async admitAllWaitingParticipants(meetingId: string, hostUserId: string) {
-
     // Verify the user is the host
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
 
-    const isHost = meeting.hostId &&
-      meeting.hostId.toString() === hostUserId.toString();
+    const isHost =
+      meeting.hostId && meeting.hostId.toString() === hostUserId.toString();
 
     if (!isHost) {
-      throw new ForbiddenException('Only the meeting host can admit all participants');
+      throw new ForbiddenException(
+        'Only the meeting host can admit all participants',
+      );
     }
 
     // Find all waiting participants
     const waitingParticipants = await this.participantModel.find({
       meetingId: new Types.ObjectId(meetingId),
-      status: ParticipantStatus.WAITING
+      status: ParticipantStatus.WAITING,
     });
-
 
     // Admit all waiting participants
     const now = new Date();
@@ -2084,10 +2355,9 @@ export class ParticipantService {
       $inc: { participantCount: waitingParticipants.length },
     });
 
-
     return {
       message: `Successfully admitted ${waitingParticipants.length} participants`,
-      admittedCount: waitingParticipants.length
+      admittedCount: waitingParticipants.length,
     };
   }
 
@@ -2100,11 +2370,13 @@ export class ParticipantService {
         $or: [
           { displayName: { $regex: /^fake|test|dummy/i } },
           { userId: { $exists: false } },
-          { userId: null }
-        ]
+          { userId: null },
+        ],
       });
-      
-      this.logger.log(`[CLEAR_FAKE_PARTICIPANTS] Cleared ${result.deletedCount} fake participants for meeting ${meetingId}`);
+
+      this.logger.log(
+        `[CLEAR_FAKE_PARTICIPANTS] Cleared ${result.deletedCount} fake participants for meeting ${meetingId}`,
+      );
       return result.deletedCount;
     } catch (error) {
       this.logger.error(`[CLEAR_FAKE_PARTICIPANTS] Error: ${error.message}`);
@@ -2119,7 +2391,9 @@ export class ParticipantService {
    */
   async notifyMeetingStarted(meetingId: string): Promise<void> {
     try {
-      this.logger.log(`[NOTIFY_MEETING_STARTED] Meeting ${meetingId} has started`);
+      this.logger.log(
+        `[NOTIFY_MEETING_STARTED] Meeting ${meetingId} has started`,
+      );
       // This method can be used to trigger notifications or update meeting status
       // For now, it's a placeholder for future implementation
     } catch (error) {
@@ -2133,16 +2407,14 @@ export class ParticipantService {
    */
   async cleanupDuplicateParticipants(meetingId: string): Promise<number> {
     try {
-      
       // Find all participants in this meeting (both ObjectId and string meetingId)
       const allParticipants = await this.participantModel.find({
-        meetingId: { $in: [new Types.ObjectId(meetingId), meetingId] }
+        meetingId: { $in: [new Types.ObjectId(meetingId), meetingId] },
       });
-      
-      
+
       // Group by userId to find duplicates
       const participantsByUser = new Map<string, any[]>();
-      
+
       for (const participant of allParticipants) {
         const userId = participant.userId.toString();
         if (!participantsByUser.has(userId)) {
@@ -2150,32 +2422,30 @@ export class ParticipantService {
         }
         participantsByUser.get(userId)!.push(participant);
       }
-      
+
       let deletedCount = 0;
-      
+
       // For each user with multiple entries, keep the one with the most recent lastSeenAt
       for (const [userId, participants] of participantsByUser.entries()) {
         if (participants.length > 1) {
-          
           // Sort by lastSeenAt (most recent first) - this is the key fix!
           participants.sort((a, b) => {
             const aTime = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
             const bTime = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
             return bTime - aTime;
           });
-          
+
           // Keep the first (most recent lastSeenAt) entry, delete the rest
           const toKeep = participants[0];
           const toDelete = participants.slice(1);
-          
-          
+
           for (const duplicate of toDelete) {
             await this.participantModel.findByIdAndDelete(duplicate._id);
             deletedCount++;
           }
         }
       }
-      
+
       return deletedCount;
     } catch (error) {
       this.logger.error(`[CLEANUP_DUPLICATES] Error: ${error.message}`);
@@ -2188,58 +2458,71 @@ export class ParticipantService {
    */
   async cleanupStaleParticipants(thresholdSeconds: number): Promise<number> {
     try {
-      const threshold = new Date(Date.now() - (thresholdSeconds * 1000));
-      
+      const threshold = new Date(Date.now() - thresholdSeconds * 1000);
+
       // Find participants who haven't been seen since the threshold
       const staleParticipants = await this.participantModel.find({
         lastSeenAt: { $lt: threshold },
-        status: { $ne: 'LEFT' }
+        status: { $ne: 'LEFT' },
       });
 
       let cleanedCount = 0;
       const now = new Date();
-      
+
       for (const participant of staleParticipants) {
         // Close any open sessions
         const sessions = participant.sessions || [];
         if (sessions.length > 0) {
           const lastSession = sessions[sessions.length - 1];
-          
+
           // ✅ FIX: Check if the last session is still open (prevent double counting)
           if (lastSession.leftAt) {
-            this.logger.log(`[CLEANUP_STALE_PARTICIPANTS] Session already closed for participant ${participant._id}`);
+            this.logger.log(
+              `[CLEANUP_STALE_PARTICIPANTS] Session already closed for participant ${participant._id}`,
+            );
           } else if (lastSession.joinedAt) {
             // Close the session
             lastSession.leftAt = now;
             const durationSec = Math.floor(
-              (now.getTime() - new Date(lastSession.joinedAt).getTime()) / 1000
+              (now.getTime() - new Date(lastSession.joinedAt).getTime()) / 1000,
             );
             lastSession.durationSec = durationSec;
-            
+
             // ✅ FIX: Update total duration with double-counting prevention - include sessions with durationSec = 0
             const previousTotal = participant.totalDurationSec || 0;
             const sessionSum = participant.sessions
-              .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+              .filter(
+                (s) =>
+                  s.leftAt &&
+                  s.durationSec !== undefined &&
+                  s.durationSec !== null,
+              )
               .reduce((sum, s) => sum + (s.durationSec || 0), 0);
-            
+
             if (sessionSum <= previousTotal) {
               participant.totalDurationSec = previousTotal + durationSec;
-              this.logger.log(`[CLEANUP_STALE_PARTICIPANTS] Closed session for participant ${participant._id} - Duration: ${durationSec}s (new total: ${participant.totalDurationSec}s)`);
+              this.logger.log(
+                `[CLEANUP_STALE_PARTICIPANTS] Closed session for participant ${participant._id} - Duration: ${durationSec}s (new total: ${participant.totalDurationSec}s)`,
+              );
             } else {
-              this.logger.warn(`[CLEANUP_STALE_PARTICIPANTS] Session duration already counted for participant ${participant._id}`);
+              this.logger.warn(
+                `[CLEANUP_STALE_PARTICIPANTS] Session duration already counted for participant ${participant._id}`,
+              );
             }
           }
         }
-        
+
         // Mark as LEFT
         participant.status = ParticipantStatus.LEFT;
-        
+
         // Save the participant with closed session
         await participant.save();
         cleanedCount++;
       }
 
-      this.logger.log(`[CLEANUP_STALE_PARTICIPANTS] Cleaned up ${cleanedCount} stale participants (threshold: ${thresholdSeconds}s)`);
+      this.logger.log(
+        `[CLEANUP_STALE_PARTICIPANTS] Cleaned up ${cleanedCount} stale participants (threshold: ${thresholdSeconds}s)`,
+      );
       return cleanedCount;
     } catch (error) {
       this.logger.error(`[CLEANUP_STALE_PARTICIPANTS] Error: ${error.message}`);
@@ -2256,10 +2539,12 @@ export class ParticipantService {
         { userId, status: { $ne: 'LEFT' } },
         {
           status: 'LEFT',
-          leftAt: new Date()
-        }
+          leftAt: new Date(),
+        },
       );
-      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT] Marked user ${userId} as LEFT`);
+      this.logger.log(
+        `[MARK_PARTICIPANT_AS_LEFT] Marked user ${userId} as LEFT`,
+      );
     } catch (error) {
       this.logger.error(`[MARK_PARTICIPANT_AS_LEFT] Error: ${error.message}`);
     }
@@ -2269,97 +2554,136 @@ export class ParticipantService {
    * Mark a participant as LEFT in a specific meeting
    * ✅ FIXED: Now properly closes active sessions to prevent ghost member attendance
    */
-  async markParticipantAsLeftInMeeting(userId: string, meetingId: string): Promise<void> {
+  async markParticipantAsLeftInMeeting(
+    userId: string,
+    meetingId: string,
+  ): Promise<void> {
     try {
-      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Starting - user ${userId} in meeting ${meetingId}`);
-      
+      this.logger.log(
+        `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Starting - user ${userId} in meeting ${meetingId}`,
+      );
+
       // Find all participants for this user in this meeting who aren't already LEFT
       const participants = await this.participantModel.find({
         userId: new Types.ObjectId(userId),
         meetingId: new Types.ObjectId(meetingId),
-        status: { $ne: ParticipantStatus.LEFT }
+        status: { $ne: ParticipantStatus.LEFT },
       });
 
       if (participants.length === 0) {
-        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] No active participants found for user ${userId} in meeting ${meetingId}`);
+        this.logger.log(
+          `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] No active participants found for user ${userId} in meeting ${meetingId}`,
+        );
         return;
       }
 
       const now = new Date();
-      
+
       // Process each participant
       for (const participant of participants) {
-        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Processing participant ${participant._id}`);
-        
+        this.logger.log(
+          `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Processing participant ${participant._id}`,
+        );
+
         // ✅ CRITICAL FIX: Close any open sessions
         const sessions = participant.sessions || [];
         if (sessions.length > 0) {
           const lastSession = sessions[sessions.length - 1];
-          
+
           // ✅ FIX: Check if the last session is still open (prevent double counting)
           if (lastSession.leftAt) {
-            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Last session already closed for participant ${participant._id}`);
+            this.logger.log(
+              `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Last session already closed for participant ${participant._id}`,
+            );
           } else if (lastSession.joinedAt) {
             // Close the session
             lastSession.leftAt = now;
             const durationSec = Math.floor(
-              (now.getTime() - lastSession.joinedAt.getTime()) / 1000
+              (now.getTime() - lastSession.joinedAt.getTime()) / 1000,
             );
             lastSession.durationSec = durationSec;
-            
+
             // ✅ FIX: Update total duration with double-counting prevention - include sessions with durationSec = 0
             const previousTotal = participant.totalDurationSec || 0;
             const sessionSum = participant.sessions
-              .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+              .filter(
+                (s) =>
+                  s.leftAt &&
+                  s.durationSec !== undefined &&
+                  s.durationSec !== null,
+              )
               .reduce((sum, s) => sum + (s.durationSec || 0), 0);
-            
+
             if (sessionSum <= previousTotal) {
               participant.totalDurationSec = previousTotal + durationSec;
-              this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Closed session for participant ${participant._id} - Duration: ${durationSec}s (new total: ${participant.totalDurationSec}s)`);
+              this.logger.log(
+                `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Closed session for participant ${participant._id} - Duration: ${durationSec}s (new total: ${participant.totalDurationSec}s)`,
+              );
             } else {
-              this.logger.warn(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Session duration already counted for participant ${participant._id}`);
+              this.logger.warn(
+                `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Session duration already counted for participant ${participant._id}`,
+              );
             }
           }
         } else {
-          this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] No sessions found for participant ${participant._id}`);
+          this.logger.log(
+            `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] No sessions found for participant ${participant._id}`,
+          );
         }
-        
+
         // Mark as LEFT
         participant.status = ParticipantStatus.LEFT;
-        
+
         // Save the participant with closed session
         await participant.save();
-        
-        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Successfully marked participant ${participant._id} as LEFT with closed session`);
+
+        this.logger.log(
+          `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Successfully marked participant ${participant._id} as LEFT with closed session`,
+        );
       }
-      
+
       // Decrement meeting participant count
       const updatedMeeting = await this.meetingModel.findByIdAndUpdate(
         meetingId,
         { $inc: { participantCount: -participants.length } },
-        { new: true } // Return updated document
+        { new: true }, // Return updated document
       );
-      
+
       // ✅ AUTO-END: If participant count reaches 0, automatically end the meeting
-      if (updatedMeeting && updatedMeeting.participantCount <= 0 && updatedMeeting.status === MeetingStatus.LIVE) {
-        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Participant count reached 0 - Auto-ending meeting ${meetingId}`);
+      if (
+        updatedMeeting &&
+        updatedMeeting.participantCount <= 0 &&
+        updatedMeeting.status === MeetingStatus.LIVE
+      ) {
+        this.logger.log(
+          `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Participant count reached 0 - Auto-ending meeting ${meetingId}`,
+        );
         updatedMeeting.status = MeetingStatus.ENDED;
         updatedMeeting.endedAt = new Date();
-        
+
         if (updatedMeeting.actualStartAt) {
           const durationMin = Math.floor(
-            (updatedMeeting.endedAt.getTime() - updatedMeeting.actualStartAt.getTime()) / 60000
+            (updatedMeeting.endedAt.getTime() -
+              updatedMeeting.actualStartAt.getTime()) /
+              60000,
           );
           updatedMeeting.durationMin = durationMin;
         }
-        
+
         await updatedMeeting.save();
-        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Meeting ${meetingId} auto-ended due to zero participants`);
+        this.logger.log(
+          `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Meeting ${meetingId} auto-ended due to zero participants`,
+        );
       }
-      
-      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Completed - Marked ${participants.length} participant(s) as LEFT for user ${userId} in meeting ${meetingId}`);
+
+      this.logger.log(
+        `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Completed - Marked ${participants.length} participant(s) as LEFT for user ${userId} in meeting ${meetingId}`,
+      );
     } catch (error) {
-      this.logger.error(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Error: ${error.message}`, error.stack);
+      this.logger.error(
+        `[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Error: ${error.message}`,
+        error.stack,
+      );
     }
   }
 
@@ -2369,118 +2693,161 @@ export class ParticipantService {
    */
   async markParticipantAsLeftAcrossAllMeetings(userId: string): Promise<void> {
     try {
-      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Starting - user ${userId}`);
-      
+      this.logger.log(
+        `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Starting - user ${userId}`,
+      );
+
       // Find all active participants for this user across all meetings
       const participants = await this.participantModel.find({
         userId: new Types.ObjectId(userId),
-        status: { $ne: ParticipantStatus.LEFT }
+        status: { $ne: ParticipantStatus.LEFT },
       });
 
       if (participants.length === 0) {
-        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] No active participants found for user ${userId}`);
+        this.logger.log(
+          `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] No active participants found for user ${userId}`,
+        );
         return;
       }
 
-      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Found ${participants.length} active participant(s) for user ${userId}`);
+      this.logger.log(
+        `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Found ${participants.length} active participant(s) for user ${userId}`,
+      );
 
       const now = new Date();
       const meetingIds = new Set<string>();
-      
+
       // Process each participant and close their sessions
       for (const participant of participants) {
-        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Processing participant ${participant._id} in meeting ${participant.meetingId}`);
-        
+        this.logger.log(
+          `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Processing participant ${participant._id} in meeting ${participant.meetingId}`,
+        );
+
         // ✅ CRITICAL FIX: Close any open sessions
         const sessions = participant.sessions || [];
         if (sessions.length > 0) {
           const lastSession = sessions[sessions.length - 1];
-          
+
           // ✅ FIX: Check if the last session is still open (prevent double counting)
           if (lastSession.leftAt) {
-            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Session already closed for participant ${participant._id}`);
+            this.logger.log(
+              `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Session already closed for participant ${participant._id}`,
+            );
           } else if (lastSession.joinedAt) {
             // Close the session
             lastSession.leftAt = now;
             const durationSec = Math.floor(
-              (now.getTime() - lastSession.joinedAt.getTime()) / 1000
+              (now.getTime() - lastSession.joinedAt.getTime()) / 1000,
             );
             lastSession.durationSec = durationSec;
-            
+
             // ✅ FIX: Update total duration with double-counting prevention - include sessions with durationSec = 0
             const previousTotal = participant.totalDurationSec || 0;
             const sessionSum = participant.sessions
-              .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+              .filter(
+                (s) =>
+                  s.leftAt &&
+                  s.durationSec !== undefined &&
+                  s.durationSec !== null,
+              )
               .reduce((sum, s) => sum + (s.durationSec || 0), 0);
-            
+
             if (sessionSum <= previousTotal) {
               participant.totalDurationSec = previousTotal + durationSec;
-              this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Closed session for participant ${participant._id} - Duration: ${durationSec}s (new total: ${participant.totalDurationSec}s)`);
+              this.logger.log(
+                `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Closed session for participant ${participant._id} - Duration: ${durationSec}s (new total: ${participant.totalDurationSec}s)`,
+              );
             } else {
-              this.logger.warn(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Session duration already counted for participant ${participant._id}`);
+              this.logger.warn(
+                `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Session duration already counted for participant ${participant._id}`,
+              );
             }
           }
         }
-        
+
         // Mark as LEFT
         participant.status = ParticipantStatus.LEFT;
-        
+
         // Save the participant with closed session
         await participant.save();
-        
+
         // Track meeting IDs for count decrement
         meetingIds.add(participant.meetingId.toString());
       }
-      
+
       // Decrement participant count for each affected meeting and check for auto-end
       for (const meetingId of meetingIds) {
         const updatedMeeting = await this.meetingModel.findByIdAndUpdate(
           meetingId,
           { $inc: { participantCount: -1 } },
-          { new: true } // Return updated document
+          { new: true }, // Return updated document
         );
-        
+
         // ✅ AUTO-END: If participant count reaches 0, automatically end the meeting
         // ✅ FIX: Only auto-end if meeting is LIVE and count is actually 0 (not just temporarily disconnected)
-        if (updatedMeeting && updatedMeeting.participantCount <= 0 && updatedMeeting.status === MeetingStatus.LIVE) {
+        if (
+          updatedMeeting &&
+          updatedMeeting.participantCount <= 0 &&
+          updatedMeeting.status === MeetingStatus.LIVE
+        ) {
           // ✅ ADDITIONAL CHECK: Wait a bit to ensure no reconnections are happening
           // This prevents auto-end during temporary disconnections
-          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-          
+          await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
+
           // Re-check participant count after waiting (in case users reconnected)
           const recheckMeeting = await this.meetingModel.findById(meetingId);
-          if (recheckMeeting && recheckMeeting.participantCount <= 0 && recheckMeeting.status === MeetingStatus.LIVE) {
-            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Participant count reached 0 - Auto-ending meeting ${meetingId}`);
+          if (
+            recheckMeeting &&
+            recheckMeeting.participantCount <= 0 &&
+            recheckMeeting.status === MeetingStatus.LIVE
+          ) {
+            this.logger.log(
+              `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Participant count reached 0 - Auto-ending meeting ${meetingId}`,
+            );
             recheckMeeting.status = MeetingStatus.ENDED;
             recheckMeeting.endedAt = new Date();
-            
+
             if (recheckMeeting.actualStartAt) {
               const durationMin = Math.floor(
-                (recheckMeeting.endedAt.getTime() - recheckMeeting.actualStartAt.getTime()) / 60000
+                (recheckMeeting.endedAt.getTime() -
+                  recheckMeeting.actualStartAt.getTime()) /
+                  60000,
               );
               recheckMeeting.durationMin = durationMin;
             }
-            
+
             await recheckMeeting.save();
-            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} auto-ended due to zero participants`);
-            
+            this.logger.log(
+              `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} auto-ended due to zero participants`,
+            );
+
             // ✅ FIX: Notify frontend via WebSocket that meeting ended
             if ((global as any).meetingEndEmitter) {
               (global as any).meetingEndEmitter.emit('meetingEnded', meetingId);
             } else {
-              this.logger.warn(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} ended but event emitter not available`);
+              this.logger.warn(
+                `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} ended but event emitter not available`,
+              );
             }
           } else {
-            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} participant count recovered, not ending`);
+            this.logger.log(
+              `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} participant count recovered, not ending`,
+            );
           }
         }
-        
-        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Decremented participant count for meeting ${meetingId}`);
+
+        this.logger.log(
+          `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Decremented participant count for meeting ${meetingId}`,
+        );
       }
-      
-      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Completed - marked ${participants.length} participant(s) as LEFT across ${meetingIds.size} meeting(s)`);
+
+      this.logger.log(
+        `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Completed - marked ${participants.length} participant(s) as LEFT across ${meetingIds.size} meeting(s)`,
+      );
     } catch (error) {
-      this.logger.error(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Error: ${error.message}`);
+      this.logger.error(
+        `[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Error: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -2489,32 +2856,33 @@ export class ParticipantService {
    * Update participant presence (lastSeenAt and socketId)
    * FIXED: Use upsert to create participant record if it doesn't exist
    */
-  async updateParticipantPresence(userId: string, meetingId: string, socketId: string): Promise<void> {
+  async updateParticipantPresence(
+    userId: string,
+    meetingId: string,
+    socketId: string,
+  ): Promise<void> {
     try {
-      
       // FIXED: Handle both ObjectId and string meetingId formats
-      const meetingIdQuery = Types.ObjectId.isValid(meetingId) 
+      const meetingIdQuery = Types.ObjectId.isValid(meetingId)
         ? { $in: [new Types.ObjectId(meetingId), meetingId] } // Search for both ObjectId and string
         : meetingId; // If not valid ObjectId, use as string
-      
+
       // First, try to update existing participant (handle both ObjectId and string meetingId)
       const updateResult = await this.participantModel.updateMany(
-        { 
-          userId: new Types.ObjectId(userId), 
-          meetingId: meetingIdQuery, 
-          status: { $ne: 'LEFT' } 
+        {
+          userId: new Types.ObjectId(userId),
+          meetingId: meetingIdQuery,
+          status: { $ne: 'LEFT' },
         },
         {
           lastSeenAt: new Date(),
           socketId,
-          status: 'ADMITTED' // FIXED: Use proper status enum value
-        }
+          status: 'ADMITTED', // FIXED: Use proper status enum value
+        },
       );
-
 
       // If no participant was updated, create a new one
       if (updateResult.modifiedCount === 0) {
-        
         // Get user info for the new participant
         const user = await this.memberModel.findById(userId);
         if (!user) {
@@ -2522,8 +2890,8 @@ export class ParticipantService {
         }
 
         // FIXED: Always use ObjectId for meetingId to ensure consistency
-        const normalizedMeetingId = Types.ObjectId.isValid(meetingId) 
-          ? new Types.ObjectId(meetingId) 
+        const normalizedMeetingId = Types.ObjectId.isValid(meetingId)
+          ? new Types.ObjectId(meetingId)
           : new Types.ObjectId(meetingId);
 
         // Create new participant record
@@ -2534,20 +2902,21 @@ export class ParticipantService {
           status: 'ADMITTED', // FIXED: Use proper status enum value
           lastSeenAt: new Date(),
           socketId,
-          joinedAt: new Date()
+          joinedAt: new Date(),
         });
 
         await newParticipant.save();
 
         // Update meeting participant count
         await this.meetingModel.findByIdAndUpdate(normalizedMeetingId, {
-          $inc: { participantCount: 1 }
+          $inc: { participantCount: 1 },
         });
-
       } else {
       }
     } catch (error) {
-      this.logger.error(`[UPDATE_PARTICIPANT_PRESENCE] Error: ${error.message}`);
+      this.logger.error(
+        `[UPDATE_PARTICIPANT_PRESENCE] Error: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -2557,43 +2926,46 @@ export class ParticipantService {
    * ✅ CRITICAL FIX: This method is called from WebSocket heartbeats AND potentially other sources
    * If user is in grace period (WebSocket disconnected), receiving a heartbeat means they're still active
    */
-  async updateParticipantHeartbeat(userId: string, meetingId: string): Promise<void> {
+  async updateParticipantHeartbeat(
+    userId: string,
+    meetingId: string,
+  ): Promise<void> {
     try {
-      
       // FIXED: Handle both ObjectId and string meetingId formats
-      const meetingIdQuery = Types.ObjectId.isValid(meetingId) 
+      const meetingIdQuery = Types.ObjectId.isValid(meetingId)
         ? { $in: [new Types.ObjectId(meetingId), meetingId] } // Search for both ObjectId and string
         : meetingId; // If not valid ObjectId, use as string
-      
+
       // First, check if participants exist
-      const existingParticipants = await this.participantModel.find({ 
-        userId: new Types.ObjectId(userId), 
-        meetingId: meetingIdQuery 
+      const existingParticipants = await this.participantModel.find({
+        userId: new Types.ObjectId(userId),
+        meetingId: meetingIdQuery,
       });
-      
+
       // Update heartbeat for ALL participants (including LEFT ones) - they're sending heartbeats so they're active
       const updateResult = await this.participantModel.updateMany(
-        { 
-          userId: new Types.ObjectId(userId), 
-          meetingId: meetingIdQuery 
+        {
+          userId: new Types.ObjectId(userId),
+          meetingId: meetingIdQuery,
         },
         {
           $set: {
             lastSeenAt: new Date(),
-            status: 'ADMITTED' // FIXED: Always set to ADMITTED if they're sending heartbeats
-          }
-        }
+            status: 'ADMITTED', // FIXED: Always set to ADMITTED if they're sending heartbeats
+          },
+        },
       );
-      
-      
+
       // Verify the update worked
-      const updatedParticipants = await this.participantModel.find({ 
-        userId: new Types.ObjectId(userId), 
-        meetingId: meetingIdQuery 
+      const updatedParticipants = await this.participantModel.find({
+        userId: new Types.ObjectId(userId),
+        meetingId: meetingIdQuery,
       });
-      
-      this.logger.log(`[UPDATE_PARTICIPANT_HEARTBEAT] Updated heartbeat for user ${userId} in meeting ${meetingId}, modified: ${updateResult.modifiedCount}`);
-      
+
+      this.logger.log(
+        `[UPDATE_PARTICIPANT_HEARTBEAT] Updated heartbeat for user ${userId} in meeting ${meetingId}, modified: ${updateResult.modifiedCount}`,
+      );
+
       // ✅ CRITICAL FIX: Notify SignalingGateway to cancel grace period if user is in disconnectedUsers
       // This prevents marking active users as LEFT when WebSocket disconnects but HTTP heartbeats continue
       // Use global event emitter pattern (same as meeting start/end events)
@@ -2601,10 +2973,14 @@ export class ParticipantService {
         const EventEmitter = require('events');
         (global as any).heartbeatEmitter = new EventEmitter();
       }
-      (global as any).heartbeatEmitter.emit('heartbeatReceived', { userId, meetingId });
-      
+      (global as any).heartbeatEmitter.emit('heartbeatReceived', {
+        userId,
+        meetingId,
+      });
     } catch (error) {
-      this.logger.error(`[UPDATE_PARTICIPANT_HEARTBEAT] Error: ${error.message}`);
+      this.logger.error(
+        `[UPDATE_PARTICIPANT_HEARTBEAT] Error: ${error.message}`,
+      );
     }
   }
 
@@ -2612,16 +2988,19 @@ export class ParticipantService {
    * Check if user has sent a heartbeat recently (within threshold milliseconds)
    * This prevents marking users as LEFT if they're still active via HTTP even if WebSocket disconnected
    */
-  async checkRecentHeartbeat(userId: string, thresholdMs: number): Promise<boolean> {
+  async checkRecentHeartbeat(
+    userId: string,
+    thresholdMs: number,
+  ): Promise<boolean> {
     try {
       const threshold = new Date(Date.now() - thresholdMs);
-      
+
       const participants = await this.participantModel.find({
         userId: new Types.ObjectId(userId),
         lastSeenAt: { $gte: threshold },
-        status: { $ne: ParticipantStatus.LEFT }
+        status: { $ne: ParticipantStatus.LEFT },
       });
-      
+
       return participants.length > 0;
     } catch (error) {
       this.logger.error(`[CHECK_RECENT_HEARTBEAT] Error: ${error.message}`);
@@ -2634,16 +3013,18 @@ export class ParticipantService {
    */
   async getStaleParticipantsCount(thresholdSeconds: number): Promise<number> {
     try {
-      const threshold = new Date(Date.now() - (thresholdSeconds * 1000));
-      
+      const threshold = new Date(Date.now() - thresholdSeconds * 1000);
+
       const count = await this.participantModel.countDocuments({
         lastSeenAt: { $lt: threshold },
-        status: { $ne: 'LEFT' }
+        status: { $ne: 'LEFT' },
       });
 
       return count;
     } catch (error) {
-      this.logger.error(`[GET_STALE_PARTICIPANTS_COUNT] Error: ${error.message}`);
+      this.logger.error(
+        `[GET_STALE_PARTICIPANTS_COUNT] Error: ${error.message}`,
+      );
       return 0;
     }
   }

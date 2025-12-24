@@ -162,16 +162,16 @@ export class TransferHostInput {
 @ObjectType()
 export class ParticipantResponse {
   @Field(() => ID)
-  _id: string
+  _id: string;
 
   @Field(() => ID, { nullable: true })
-  newHostId?: string
+  newHostId?: string;
 
   @Field(() => ID, { nullable: true })
-  newHostParticipantId?: string
+  newHostParticipantId?: string;
 
   @Field({ nullable: true })
-  newLiveKitToken?: string // ✅ New LiveKit token for host transfer;
+  newLiveKitToken?: string; // ✅ New LiveKit token for host transfer;
 
   @Field(() => ID)
   meetingId: string;
@@ -240,4 +240,3 @@ export class ParticipantMessageResponse {
   @Field(() => RemovedParticipantInfo, { nullable: true })
   removedParticipant?: RemovedParticipantInfo;
 }
-

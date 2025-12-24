@@ -41,36 +41,49 @@ export class LivekitResolver {
       if (!me || !me._id) {
         throw new Error('User not authenticated or missing user ID');
       }
-      
+
       // Use client-provided identity if available, otherwise use authenticated user ID
       const userId = clientIdentity || String(me._id);
       const userName = me.displayName || me.email || `User_${userId}`;
-      
+
       // 1) verify member can join the meeting & load meetingRole (HOST/CO_HOST/…)
-      let meetingRole: 'HOST' | 'CO_HOST' | 'PRESENTER' | 'PARTICIPANT' | 'VIEWER' = 'PARTICIPANT';
-      
+      let meetingRole:
+        | 'HOST'
+        | 'CO_HOST'
+        | 'PRESENTER'
+        | 'PARTICIPANT'
+        | 'VIEWER' = 'PARTICIPANT';
+
       try {
         // Check if user is the meeting host (using original authenticated user ID)
         const meeting = await this.meetingModel.findById(meetingId);
         if (!meeting) {
           throw new Error('Meeting not found');
         }
-        
+
         // Check if user is banned from this meeting
         const userId = String(me._id);
         if (meeting.bannedUserIds && meeting.bannedUserIds.includes(userId)) {
-          this.logger.warn(`[CREATE_LIVEKIT_TOKEN] Banned user ${userId} attempted to get token for meeting ${meetingId}`);
-          throw new ForbiddenException('You have been removed from this meeting and cannot rejoin');
+          this.logger.warn(
+            `[CREATE_LIVEKIT_TOKEN] Banned user ${userId} attempted to get token for meeting ${meetingId}`,
+          );
+          throw new ForbiddenException(
+            'You have been removed from this meeting and cannot rejoin',
+          );
         }
-        
+
         if (meeting && meeting.hostId && meeting.hostId.toString() === userId) {
           meetingRole = 'HOST';
         } else {
           // Check participant record for role (using original authenticated user ID)
           const participant = await this.participantModel
-            .findOne({ meetingId: meetingId, userId: userId, status: { $ne: 'LEFT' } })
+            .findOne({
+              meetingId: meetingId,
+              userId: userId,
+              status: { $ne: 'LEFT' },
+            })
             .exec();
-          
+
           if (participant && participant.role) {
             meetingRole = participant.role as any;
           }
@@ -78,7 +91,7 @@ export class LivekitResolver {
       } catch (roleError) {
         throw roleError;
       }
-      
+
       const token = await this.lk.generateAccessToken({
         room: meetingId,
         identity: userId,
@@ -87,7 +100,7 @@ export class LivekitResolver {
       });
 
       const wsUrl = this.lk.getWsUrl(meetingId);
-      
+
       // Determine server number (1 or 2) based on room ID
       const lastChar = meetingId.slice(-1);
       const isEven = parseInt(lastChar) % 2 === 0;
@@ -114,7 +127,10 @@ export class LivekitResolver {
   @Mutation(() => String, { name: 'endLivekitRoom' })
   async endLivekitRoom(@Args('meetingId') meetingId: string) {
     await this.lk.deleteRoom(meetingId);
-    return JSON.stringify({ success: true, message: 'Room ended successfully' });
+    return JSON.stringify({
+      success: true,
+      message: 'Room ended successfully',
+    });
   }
 
   @UseGuards(AuthGuard, RolesGuard)
@@ -125,7 +141,10 @@ export class LivekitResolver {
     @Args('identity') identity: string,
   ) {
     await this.lk.removeParticipant(meetingId, identity);
-    return JSON.stringify({ success: true, message: 'Participant kicked successfully' });
+    return JSON.stringify({
+      success: true,
+      message: 'Participant kicked successfully',
+    });
   }
 
   // Recording mutations

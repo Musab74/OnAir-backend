@@ -1,4 +1,11 @@
-import { Controller, Post, Body, Logger, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Logger,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Meeting } from '../../schemas/Meeting.model';
@@ -6,7 +13,13 @@ import { Meeting } from '../../schemas/Meeting.model';
 interface EgressWebhookPayload {
   egressId: string;
   roomName: string;
-  status: 'EGRESS_STARTING' | 'EGRESS_ACTIVE' | 'EGRESS_ENDING' | 'EGRESS_COMPLETE' | 'EGRESS_FAILED' | 'EGRESS_ABORTED';
+  status:
+    | 'EGRESS_STARTING'
+    | 'EGRESS_ACTIVE'
+    | 'EGRESS_ENDING'
+    | 'EGRESS_COMPLETE'
+    | 'EGRESS_FAILED'
+    | 'EGRESS_ABORTED';
   startedAt?: number;
   endedAt?: number;
   error?: string;
@@ -48,7 +61,12 @@ export class WebhookController {
   @HttpCode(HttpStatus.OK)
   async handleEgressWebhook(@Body() payload: any) {
     // Client-side recording - no egress webhooks needed
-    this.logger.log(`[WEBHOOK] Egress webhook received but ignored - using client-side recording`);
-    return { success: true, message: 'Client-side recording - webhook ignored' };
+    this.logger.log(
+      `[WEBHOOK] Egress webhook received but ignored - using client-side recording`,
+    );
+    return {
+      success: true,
+      message: 'Client-side recording - webhook ignored',
+    };
   }
 }

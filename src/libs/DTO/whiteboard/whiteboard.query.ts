@@ -11,13 +11,3 @@ export class WhiteboardStatusResponse {
   @Field({ nullable: true })
   startedAt?: Date;
 }
-
-
-
-
-
-
-
-
-
-

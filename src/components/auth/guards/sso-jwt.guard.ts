@@ -10,11 +10,11 @@ import { SSOService } from '../sso.service';
 
 /**
  * SSO JWT Guard - Verifies JWT tokens from PHP website
- * 
+ *
  * This guard is DIFFERENT from the standard AuthGuard:
  * - AuthGuard: Verifies NestJS-generated tokens
  * - SSOJwtGuard: Verifies PHP-generated tokens
- * 
+ *
  * Use this guard for SSO endpoints that accept PHP JWT tokens
  */
 @Injectable()
@@ -64,7 +64,9 @@ export class SSOJwtGuard implements CanActivate {
     const token = getToken();
     if (!token) {
       this.logger.warn('❌ SSO JWT token not provided');
-      throw new BadRequestException('JWT token is required for SSO authentication');
+      throw new BadRequestException(
+        'JWT token is required for SSO authentication',
+      );
     }
 
     try {
@@ -92,6 +94,3 @@ export class SSOJwtGuard implements CanActivate {
     }
   }
 }
-
-
-

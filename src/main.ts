@@ -19,31 +19,38 @@ async function bootstrap() {
 
   // CORS configuration for cross-domain SSO
   const allowedOrigins = [
-    process.env.PHP_WEBSITE_URL || 'https://livekit1.hrdeedu.com',  // PHP website domain
+    process.env.PHP_WEBSITE_URL || 'https://livekit1.hrdeedu.com', // PHP website domain
     process.env.NESTJS_FRONTEND_URL || 'https://liveee.hrdeedu.co.kr', // NestJS frontend domain
-    'http://localhost:3088',  // Development frontend
-    'http://localhost:3001',  // Alternative dev frontend
-    'http://localhost:3777',  // Development backend
-    'http://localhost:3077',  // New frontend development port
-    'http://127.0.0.1:3088',  // Alternative localhost
-    'http://127.0.0.1:3001',  // Alternative localhost
-    'http://127.0.0.1:3777',  // Alternative localhost
-    'http://127.0.0.1:3077',  // New frontend localhost port
-    'https://liveee.hrdeedu.co.kr',  // New frontend domain
-    'https://live.hrdeedu.co.kr',  // Original frontend domain
-    'null',  // For file:// protocol requests
+    'http://localhost:3088', // Development frontend
+    'http://localhost:3000', // Frontend port
+    'http://localhost:3001', // Alternative dev frontend
+    'http://localhost:3007', // Backend port
+    'http://localhost:3777', // Development backend
+    'http://localhost:3077', // New frontend development port
+    'http://127.0.0.1:3088', // Alternative localhost
+    'http://127.0.0.1:3000', // Frontend localhost
+    'http://127.0.0.1:3001', // Alternative localhost
+    'http://127.0.0.1:3007', // Backend localhost
+    'http://127.0.0.1:3777', // Alternative localhost
+    'http://127.0.0.1:3077', // New frontend localhost port
+    'https://liveee.hrdeedu.co.kr', // New frontend domain
+    'https://live.hrdeedu.co.kr', // Original frontend domain
+    'null', // For file:// protocol requests
   ];
 
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, Postman, etc.)
       if (!origin) return callback(null, true);
-      
+
       // Allow localhost and 127.0.0.1 for development
-      if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
-        return         callback(null, true);
+      if (
+        origin &&
+        (origin.includes('localhost') || origin.includes('127.0.0.1'))
+      ) {
+        return callback(null, true);
       }
-      
+
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -112,6 +119,5 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3777;
   await app.listen(port);
-
 }
 bootstrap();

@@ -14,7 +14,7 @@ import { SystemRole } from '../../libs/enums/enums';
 
 /**
  * REST API Controller for SSO Authentication
- * 
+ *
  * Provides REST endpoints for Single Sign-On integration with PHP website
  */
 @Controller('auth')
@@ -25,20 +25,20 @@ export class SSOController {
 
   /**
    * SSO Login Endpoint (POST)
-   * 
+   *
    * Accepts JWT token from PHP website in request body
-   * 
+   *
    * @route POST /auth/sso-login
    * @body { token: string }
    * @returns User data and NestJS token
-   * 
+   *
    * @example Request
    * ```bash
    * curl -X POST http://localhost:3088/auth/sso-login \
    *   -H "Content-Type: application/json" \
    *   -d '{"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}'
    * ```
-   * 
+   *
    * @example Response
    * ```json
    * {
@@ -58,9 +58,7 @@ export class SSOController {
    */
   @Post('sso-login')
   @HttpCode(HttpStatus.OK)
-  async ssoLogin(
-    @Body('token') token: string,
-  ): Promise<SSOLoginResponse> {
+  async ssoLogin(@Body('token') token: string): Promise<SSOLoginResponse> {
     this.logger.log('🔐 SSO Login request received via REST API');
 
     if (!token) {
@@ -70,7 +68,7 @@ export class SSOController {
         existed: false,
         user: null,
         token: '',
-        message: 'Token is required'
+        message: 'Token is required',
       };
     }
 
@@ -86,7 +84,7 @@ export class SSOController {
 
       return {
         ...result,
-        redirectUrl: redirectUrl
+        redirectUrl: redirectUrl,
       };
     } catch (error) {
       this.logger.error(`❌ SSO Login failed: ${error.message}`);
@@ -95,30 +93,28 @@ export class SSOController {
         existed: false,
         user: null,
         token: '',
-        message: error.message
+        message: error.message,
       };
     }
   }
 
   /**
    * SSO Login Endpoint (GET) - Alternative for testing
-   * 
+   *
    * Accepts JWT token as query parameter (useful for quick testing)
    * ⚠️ WARNING: Not recommended for production - use POST instead
-   * 
+   *
    * @route GET /auth/sso-login?token=xxx
    * @query token - JWT token from PHP
    * @returns User data and NestJS token
-   * 
+   *
    * @example Request
    * ```bash
    * curl "http://localhost:3088/auth/sso-login?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
    * ```
    */
   @Get('sso-login')
-  async ssoLoginGet(
-    @Query('token') token: string,
-  ): Promise<SSOLoginResponse> {
+  async ssoLoginGet(@Query('token') token: string): Promise<SSOLoginResponse> {
     this.logger.log('🔐 SSO Login request received via GET (testing mode)');
 
     if (!token) {
@@ -131,7 +127,7 @@ export class SSOController {
 
   /**
    * Health check endpoint for SSO service
-   * 
+   *
    * @route GET /auth/sso-health
    * @returns Service status
    */
@@ -166,4 +162,3 @@ export class SSOController {
     }
   }
 }
-

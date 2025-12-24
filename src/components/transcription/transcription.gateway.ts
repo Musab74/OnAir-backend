@@ -11,7 +11,10 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { MemberService } from '../members/member.service';
-import { TranscriptionService, SubtitleData } from '../../services/transcription/transcription.service';
+import {
+  TranscriptionService,
+  SubtitleData,
+} from '../../services/transcription/transcription.service';
 import {
   SubscribeSubtitlesInput,
   UnsubscribeSubtitlesInput,
@@ -46,12 +49,9 @@ export class TranscriptionGateway
   server: Server;
 
   private readonly logger = new Logger(TranscriptionGateway.name);
-  
+
   // Store participant language preferences per meeting
-  private participantPreferences = new Map<
-    string,
-    Map<string, string>
-  >(); // meetingId -> Map<userId, language>
+  private participantPreferences = new Map<string, Map<string, string>>(); // meetingId -> Map<userId, language>
 
   // Store active subtitle subscriptions
   private activeSubscriptions = new Map<string, Set<string>>(); // meetingId -> Set<socketId>
@@ -104,7 +104,9 @@ export class TranscriptionGateway
       if (user._id) {
         this.socketToUserMap.set(client.id, user._id);
       }
-      this.logger.log(`Client connected: ${client.id} (User: ${user.displayName})`);
+      this.logger.log(
+        `Client connected: ${client.id} (User: ${user.displayName})`,
+      );
     } catch (error: any) {
       this.logger.error(`Connection error: ${error.message}`);
       client.emit('ERROR', { message: 'Connection failed' });
@@ -114,7 +116,7 @@ export class TranscriptionGateway
 
   handleDisconnect(client: AuthenticatedSocket) {
     this.logger.log(`Client disconnected: ${client.id}`);
-    
+
     // Clean up subscriptions
     this.activeSubscriptions.forEach((socketIds, meetingId) => {
       if (socketIds.has(client.id)) {
@@ -147,17 +149,25 @@ export class TranscriptionGateway
         return;
       }
 
-      // Validate language - accept any 2-letter language code
-      // OpenAI GPT can translate to/from any language, so we accept any valid language code
-      if (!language || typeof language !== 'string' || language.length < 2) {
+      // STRICT: Only English and Korean are supported
+      if (!language || typeof language !== 'string') {
         client.emit('ERROR', {
-          message: 'Invalid language code. Language must be a valid 2-letter code (e.g., en, ko, ja, zh, es, fr, etc.)',
+          message:
+            'Language is required. Only English (en) and Korean (ko) are supported.',
         });
         return;
       }
-      
-      // Normalize language code to lowercase
-      const normalizedLanguage = language.toLowerCase();
+
+      // Normalize and validate language code
+      const normalizedLanguage = language.toLowerCase().trim();
+
+      // ONLY accept 'en' or 'ko'
+      if (normalizedLanguage !== 'en' && normalizedLanguage !== 'ko') {
+        client.emit('ERROR', {
+          message: `Invalid language code: "${language}". Only English (en) and Korean (ko) are supported.`,
+        });
+        return;
+      }
 
       // Join the meeting room
       await client.join(meetingId);
@@ -257,81 +267,132 @@ export class TranscriptionGateway
       // Get all participants subscribed to this meeting
       const subscribers = this.activeSubscriptions.get(meetingId);
 
-      this.logger.log(`[BROADCAST] Attempting to broadcast subtitle for meeting ${meetingId}`, {
-        subscribersCount: subscribers?.size || 0,
-        originalText: subtitleData.originalText,
-        sourceLanguage: subtitleData.sourceLanguage,
-        participantId: subtitleData.participantId,
-      });
+      this.logger.log(
+        `[BROADCAST] Attempting to broadcast subtitle for meeting ${meetingId}`,
+        {
+          subscribersCount: subscribers?.size || 0,
+          originalText: subtitleData.originalText,
+          sourceLanguage: subtitleData.sourceLanguage,
+          participantId: subtitleData.participantId,
+        },
+      );
 
       if (!subscribers || subscribers.size === 0) {
-        this.logger.warn(`[BROADCAST] No subscribers for meeting ${meetingId}. Active subscriptions:`, 
-          Array.from(this.activeSubscriptions.entries()).map(([id, set]) => ({ meetingId: id, count: set.size }))
+        this.logger.warn(
+          `[BROADCAST] No subscribers for meeting ${meetingId}. Active subscriptions:`,
+          Array.from(this.activeSubscriptions.entries()).map(([id, set]) => ({
+            meetingId: id,
+            count: set.size,
+          })),
         );
         return;
       }
 
       // Get language preferences for this meeting
-      const preferences = this.participantPreferences.get(meetingId) || new Map();
+      const preferences =
+        this.participantPreferences.get(meetingId) || new Map();
       const originalText = subtitleData.originalText;
-      const sourceLanguage = subtitleData.sourceLanguage || 'en';
+      const sourceLanguage = (subtitleData.sourceLanguage || 'en')
+        .toLowerCase()
+        .trim();
 
-      // Group subscribers by their preferred language to minimize translation API calls
+      // STRICT: Only process English or Korean source languages
+      if (sourceLanguage !== 'en' && sourceLanguage !== 'ko') {
+        this.logger.warn(
+          `[BROADCAST] Ignoring non-English/Korean source language: ${sourceLanguage}`,
+        );
+        return; // Don't broadcast if source is not English or Korean
+      }
+
+      // Group subscribers by their preferred language (only 'en' or 'ko')
       const languageGroups = new Map<string, string[]>(); // language -> socketIds[]
-      
+
       // Iterate through all subscribed socket IDs
       for (const socketId of subscribers) {
         // Get userId from our mapping
         const userId = this.socketToUserMap.get(socketId);
         if (userId) {
-          // Get user's preferred language
-          const userLang = preferences.get(userId) || 'en';
+          // Get user's preferred language (must be 'en' or 'ko')
+          let userLang = preferences.get(userId) || 'en';
+          userLang = userLang.toLowerCase().trim();
+
+          // Validate user language - only accept 'en' or 'ko'
+          if (userLang !== 'en' && userLang !== 'ko') {
+            this.logger.warn(
+              `[BROADCAST] Invalid user language preference: ${userLang}, defaulting to 'en'`,
+            );
+            userLang = 'en';
+          }
+
+          // STRICT MATCHING LOGIC: Only broadcast if source matches user's expected pattern
+          // User wants English → only show if source is Korean (translate to English)
+          // User wants Korean → only show if source is English (translate to Korean)
+          // If source matches user's language, don't show (user already understands)
+          const shouldShow =
+            (userLang === 'en' && sourceLanguage === 'ko') ||
+            (userLang === 'ko' && sourceLanguage === 'en');
+
+          if (!shouldShow) {
+            // Skip this user - they don't need translation (source matches their language)
+            continue;
+          }
+
           if (!languageGroups.has(userLang)) {
             languageGroups.set(userLang, []);
           }
           languageGroups.get(userLang)!.push(socketId);
         } else {
-          // Fallback to English if user mapping not found (shouldn't happen, but handle gracefully)
-          const defaultLang = 'en';
-          if (!languageGroups.has(defaultLang)) {
-            languageGroups.set(defaultLang, []);
-          }
-          languageGroups.get(defaultLang)!.push(socketId);
-          this.logger.warn(`[BROADCAST] No userId mapping found for socket ${socketId}, using default language`);
+          // No user mapping - skip (don't default to English to avoid wrong translations)
+          this.logger.warn(
+            `[BROADCAST] No userId mapping found for socket ${socketId}, skipping broadcast`,
+          );
         }
       }
 
+      // If no users need translation, skip processing
+      if (languageGroups.size === 0) {
+        this.logger.log(
+          `[BROADCAST] No users need translation (source: ${sourceLanguage}, all users speak this language)`,
+        );
+        return;
+      }
+
       // Translate to each unique language needed (in parallel for speed)
-      const translationPromises: Array<Promise<{ language: string; translatedText: string }>> = [];
-      
+      const translationPromises: Array<
+        Promise<{ language: string; translatedText: string }>
+      > = [];
+
       for (const [targetLang, socketIds] of languageGroups.entries()) {
-        // If source and target are the same, no translation needed
-        if (sourceLanguage.toLowerCase() === targetLang.toLowerCase()) {
-          translationPromises.push(
-            Promise.resolve({ language: targetLang, translatedText: originalText })
+        // Validate target language
+        if (targetLang !== 'en' && targetLang !== 'ko') {
+          this.logger.warn(
+            `[BROADCAST] Invalid target language: ${targetLang}, skipping`,
           );
-        } else {
-          // Translate to target language
-          translationPromises.push(
-            this.transcriptionService
-              .translateText(originalText, targetLang, sourceLanguage)
-              .then((result) => ({
-                language: targetLang,
-                translatedText: result.translatedText || originalText,
-              }))
-              .catch((error) => {
-                this.logger.error(`[BROADCAST] Translation failed for ${targetLang}: ${error.message}`);
-                // Fallback to original text if translation fails
-                return { language: targetLang, translatedText: originalText };
-              })
-          );
+          continue;
         }
+
+        // Always translate (we already filtered users who don't need translation)
+        translationPromises.push(
+          this.transcriptionService
+            .translateText(originalText, targetLang, sourceLanguage)
+            .then((result) => ({
+              language: targetLang,
+              translatedText: result.translatedText || originalText,
+            }))
+            .catch((error) => {
+              this.logger.error(
+                `[BROADCAST] Translation failed for ${targetLang}: ${error.message}`,
+              );
+              // Return empty to prevent showing wrong text
+              return { language: targetLang, translatedText: '' };
+            }),
+        );
       }
 
       // Wait for all translations to complete in parallel
       // Use allSettled to ensure one failure doesn't stop others
       const translationResults = await Promise.allSettled(translationPromises);
-      
+
       // Create a map of language -> translated text for quick lookup
       const translationMap = new Map<string, string>();
       const languageList = Array.from(languageGroups.keys());
@@ -341,23 +402,55 @@ export class TranscriptionGateway
           const { translatedText } = result.value;
           translationMap.set(targetLang, translatedText);
         } else {
-          // If translation failed, use original text to prevent speech loss
-          this.logger.warn(`[BROADCAST] Translation failed for ${targetLang}, using original text`);
-          translationMap.set(targetLang, originalText);
+          // If translation failed, log as error and notify users
+          this.logger.error(
+            `[BROADCAST] ❌ TRANSLATION PROMISE REJECTED for ${targetLang}. Error: ${result.reason?.message || 'Unknown error'}`,
+          );
+          // Don't use original text - it's wrong language! Return empty so it gets skipped with error notification
+          translationMap.set(targetLang, '');
+
+          // Notify affected users
+          const failedSocketIds = languageGroups.get(targetLang) || [];
+          for (const socketId of failedSocketIds) {
+            this.server.to(socketId).emit('TRANSLATION_ERROR', {
+              message: `Translation failed for ${targetLang}. Please check your connection and try again.`,
+              originalText: originalText.substring(0, 100),
+              targetLanguage: targetLang,
+              error: result.reason?.message || 'Translation promise rejected',
+              timestamp: Date.now(),
+            });
+          }
         }
       });
 
       // Send personalized subtitles to each subscriber
       let sentCount = 0;
       for (const [targetLang, socketIds] of languageGroups.entries()) {
-        const translatedText = translationMap.get(targetLang) || originalText;
+        const translatedText = translationMap.get(targetLang) || '';
+
+        // Skip if translation is empty (translation failed or filtered out)
+        if (!translatedText || translatedText.trim().length === 0) {
+          this.logger.error(
+            `[BROADCAST] ❌ TRANSLATION FAILED SILENTLY for ${targetLang} - empty translation result. Original: "${originalText.substring(0, 50)}"`,
+          );
+          // Notify affected users that translation failed
+          for (const socketId of socketIds) {
+            this.server.to(socketId).emit('TRANSLATION_ERROR', {
+              message: `Translation failed for language ${targetLang}. Please try again.`,
+              originalText: originalText.substring(0, 100),
+              targetLanguage: targetLang,
+              timestamp: Date.now(),
+            });
+          }
+          continue;
+        }
 
         const broadcastData = {
           meetingId: subtitleData.meetingId,
           participantId: subtitleData.participantId,
           participantName: (subtitleData as any).participantName || 'Unknown',
           originalText: originalText,
-          translatedText: translatedText,
+          translatedText: translatedText.trim(),
           sourceLanguage: sourceLanguage,
           targetLanguage: targetLang,
           timestamp: subtitleData.timestamp,
@@ -372,13 +465,16 @@ export class TranscriptionGateway
 
       this.logger.log(
         `[BROADCAST] Successfully broadcasted personalized subtitles to ${sentCount} subscribers in meeting ${meetingId}`,
-        { 
+        {
           languagesUsed: Array.from(languageGroups.keys()),
           originalText: originalText.substring(0, 50),
-        }
+        },
       );
     } catch (error: any) {
-      this.logger.error(`[BROADCAST] Broadcast subtitle error: ${error.message}`, error.stack);
+      this.logger.error(
+        `[BROADCAST] Broadcast subtitle error: ${error.message}`,
+        error.stack,
+      );
     }
   }
 
@@ -396,15 +492,10 @@ export class TranscriptionGateway
   /**
    * Set participant language preference
    */
-  setParticipantLanguage(
-    meetingId: string,
-    userId: string,
-    language: string,
-  ) {
+  setParticipantLanguage(meetingId: string, userId: string, language: string) {
     if (!this.participantPreferences.has(meetingId)) {
       this.participantPreferences.set(meetingId, new Map());
     }
     this.participantPreferences.get(meetingId)!.set(userId, language);
   }
 }
-

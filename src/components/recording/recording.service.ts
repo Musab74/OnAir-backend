@@ -10,7 +10,11 @@ import { Model, Types } from 'mongoose';
 import { Meeting } from '../../schemas/Meeting.model';
 import { Member } from '../../schemas/Member.model';
 import { Vod } from '../../schemas/Vod.model';
-import { SystemRole, RecordingStatus, VodSourceType } from '../../libs/enums/enums';
+import {
+  SystemRole,
+  RecordingStatus,
+  VodSourceType,
+} from '../../libs/enums/enums';
 import {
   StartMeetingRecordingInput,
   StopMeetingRecordingInput,
@@ -43,7 +47,6 @@ export class RecordingService {
     input: StartMeetingRecordingInput,
     userId: string,
   ): Promise<RecordingResponse> {
-
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
@@ -66,7 +69,7 @@ export class RecordingService {
 
       // Check permissions AFTER confirming meeting is active
       const user = await this.memberModel.findById(userId);
-      
+
       if (
         user.systemRole !== SystemRole.ADMIN &&
         meeting.hostId.toString() !== userId.toString()
@@ -86,11 +89,11 @@ export class RecordingService {
       // Generate recording ID and file name
       const recordingId = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const fileName = `${meeting._id}_${Date.now()}.mp4`;
-      
+
       // Configure recording for local file output first
       const recordingsDir = path.join(process.cwd(), 'uploads', 'recordings');
       const filePath = path.join(recordingsDir, fileName);
-      
+
       // Ensure recordings directory exists
       if (!fs.existsSync(recordingsDir)) {
         fs.mkdirSync(recordingsDir, { recursive: true });
@@ -145,7 +148,6 @@ export class RecordingService {
     input: StopMeetingRecordingInput,
     userId: string,
   ): Promise<RecordingResponse> {
-
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
@@ -192,29 +194,37 @@ export class RecordingService {
       }
 
       // Get the recording filename from the existing recordingUrl or generate new one
-      const fileName = meeting.recordingUrl 
-        ? meeting.recordingUrl.split('/').pop() || `${meeting._id}_${meeting.recordingStartedAt?.getTime() || Date.now()}.mp4`
+      const fileName = meeting.recordingUrl
+        ? meeting.recordingUrl.split('/').pop() ||
+          `${meeting._id}_${meeting.recordingStartedAt?.getTime() || Date.now()}.mp4`
         : `${meeting._id}_${meeting.recordingStartedAt?.getTime() || Date.now()}.mp4`;
-      
+
       // Keep the VOD server URL if it exists, otherwise use local path
-      const recordingUrl = meeting.recordingUrl || `/uploads/recordings/${fileName}`;
+      const recordingUrl =
+        meeting.recordingUrl || `/uploads/recordings/${fileName}`;
       meeting.recordingUrl = recordingUrl;
 
       await meeting.save();
 
       // Auto-create VOD entry from recording
       try {
-        const fileName = recordingUrl.split('/').pop() || `${meeting.recordingId}.mp4`;
+        const fileName =
+          recordingUrl.split('/').pop() || `${meeting.recordingId}.mp4`;
         // Use the correct storageKey based on VOD server path
         const storageKey = `recordings/${fileName}`;
-        
+
         // Get actual file size from file if accessible
         let fileSize = 0;
-        
+
         // Check if file is on VOD server
         const vodServerPath = `/mnt/vod-server/recordings/${fileName}`;
-        const localFilePath = path.join(process.cwd(), 'uploads', 'recordings', fileName);
-        
+        const localFilePath = path.join(
+          process.cwd(),
+          'uploads',
+          'recordings',
+          fileName,
+        );
+
         if (fs.existsSync(vodServerPath)) {
           const stats = fs.statSync(vodServerPath);
           fileSize = stats.size;
@@ -272,7 +282,6 @@ export class RecordingService {
     input: PauseMeetingRecordingInput,
     userId: string,
   ): Promise<RecordingResponse> {
-
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
@@ -344,7 +353,6 @@ export class RecordingService {
     input: ResumeRecordingInput,
     userId: string,
   ): Promise<RecordingResponse> {
-
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
@@ -418,7 +426,6 @@ export class RecordingService {
     input: GetRecordingInput,
     userId: string,
   ): Promise<MeetingRecordingInfo> {
-
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
@@ -438,7 +445,7 @@ export class RecordingService {
       // Fix: Use proper string comparison
       const isHost = meeting.hostId && meeting.hostId.toString() === userId;
       const isAdmin = user.systemRole === SystemRole.ADMIN;
-      
+
       if (!isHost && !isAdmin) {
         throw new ForbiddenException(
           'Only the meeting host can view recording info',
@@ -458,7 +465,7 @@ export class RecordingService {
         recordingStatus: meeting.recordingStatus as RecordingStatus,
         quality: '720p', // Default quality
         format: 'mp4', // Default format,
-        
+
         // Additional fields for frontend compatibility
         status: meeting.recordingStatus as RecordingStatus, // Alias for recordingStatus
         recordingType: 'VIDEO', // Default recording type
@@ -480,7 +487,6 @@ export class RecordingService {
 
   // GET RECORDING STATS
   async getRecordingStats(userId: string): Promise<RecordingStats> {
-
     try {
       const user = await this.memberModel.findById(userId);
       if (!user) {

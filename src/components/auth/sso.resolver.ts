@@ -5,7 +5,7 @@ import { SSOLoginInput, SSOLoginResult } from '../../libs/DTO/auth/sso.input';
 
 /**
  * GraphQL Resolver for SSO Authentication
- * 
+ *
  * Provides mutations for Single Sign-On integration with PHP website
  */
 @Resolver()
@@ -16,13 +16,13 @@ export class SSOResolver {
 
   /**
    * SSO Login Mutation
-   * 
+   *
    * Accepts JWT token from PHP website, verifies it, syncs user to MongoDB,
    * and returns a new NestJS JWT token for API authentication
-   * 
+   *
    * @param ssoLoginInput - Contains JWT token from PHP
    * @returns SSOLoginResult with user data and NestJS token
-   * 
+   *
    * @example GraphQL Mutation
    * ```graphql
    * mutation SSOLogin($token: String!) {
@@ -64,6 +64,3 @@ export class SSOResolver {
     }
   }
 }
-
-
-

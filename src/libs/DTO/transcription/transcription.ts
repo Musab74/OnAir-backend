@@ -98,5 +98,3 @@ export class SubtitleDataDto {
   @Field()
   timestamp!: number;
 }
-
-

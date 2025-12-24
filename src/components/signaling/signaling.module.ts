@@ -9,10 +9,16 @@ import { MemberModule } from '../members/member.module';
 import { ParticipantModule } from '../participants/participant.module';
 import { ChatService } from '../../services/chat.service';
 import { MongooseModule } from '@nestjs/mongoose';
-import { ChatMessage, ChatMessageSchema } from '../../schemas/Chat.message.model';
+import {
+  ChatMessage,
+  ChatMessageSchema,
+} from '../../schemas/Chat.message.model';
 import { Meeting, MeetingSchema } from '../../schemas/Meeting.model';
 import { Member, MemberSchema } from '../../schemas/Member.model';
-import { Participant, ParticipantSchema } from '../../schemas/Participant.model';
+import {
+  Participant,
+  ParticipantSchema,
+} from '../../schemas/Participant.model';
 
 @Module({
   imports: [
@@ -24,7 +30,7 @@ import { Participant, ParticipantSchema } from '../../schemas/Participant.model'
         if (!secret || secret.trim().length === 0) {
           throw new Error(
             '❌ JWT_SECRET is not set or is empty in .env file! ' +
-            'Please set JWT_SECRET in your .env file with at least 32 characters.',
+              'Please set JWT_SECRET in your .env file with at least 32 characters.',
           );
         }
         return {

@@ -21,7 +21,8 @@ export class ChatService {
     private chatMessageModel: Model<ChatMessageDocument>,
     @InjectModel(Meeting.name) private meetingModel: Model<MeetingDocument>,
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
-    @InjectModel(Participant.name) private participantModel: Model<ParticipantDocument>,
+    @InjectModel(Participant.name)
+    private participantModel: Model<ParticipantDocument>,
   ) {}
 
   // WebSocket methods for real-time chat
@@ -37,7 +38,9 @@ export class ChatService {
       text: data.text,
       displayName: data.displayName,
       userId: new Types.ObjectId(data.userId),
-      replyToMessageId: data.replyToMessageId ? new Types.ObjectId(data.replyToMessageId) : undefined,
+      replyToMessageId: data.replyToMessageId
+        ? new Types.ObjectId(data.replyToMessageId)
+        : undefined,
       createdAt: new Date(),
     });
 
@@ -63,7 +66,7 @@ export class ChatService {
         .lean()
         .exec();
 
-      return messages.map(message => ({
+      return messages.map((message) => ({
         _id: message._id.toString(),
         meetingId: message.meetingId.toString(),
         text: message.text,
@@ -78,7 +81,11 @@ export class ChatService {
   }
 
   // Check if user has access to meeting chat
-  async checkMeetingAccess(meetingId: string, userId: string, userRole: SystemRole): Promise<boolean> {
+  async checkMeetingAccess(
+    meetingId: string,
+    userId: string,
+    userRole: SystemRole,
+  ): Promise<boolean> {
     try {
       // Verify meeting exists
       const meeting = await this.meetingModel.findById(meetingId);
@@ -87,7 +94,10 @@ export class ChatService {
       }
 
       // Check if user has access to this meeting
-      if (userRole === SystemRole.ADMIN || meeting.hostId.toString() === userId) {
+      if (
+        userRole === SystemRole.ADMIN ||
+        meeting.hostId.toString() === userId
+      ) {
         return true;
       }
 
@@ -95,7 +105,7 @@ export class ChatService {
       const isParticipant = await this.participantModel.findOne({
         meetingId: new Types.ObjectId(meetingId),
         userId: new Types.ObjectId(userId),
-        status: { $in: ['WAITING', 'APPROVED', 'ADMITTED'] }
+        status: { $in: ['WAITING', 'APPROVED', 'ADMITTED'] },
       });
 
       return !!isParticipant;
@@ -104,7 +114,3 @@ export class ChatService {
     }
   }
 }
-
-
-
-

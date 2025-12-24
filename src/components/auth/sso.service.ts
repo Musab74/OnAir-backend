@@ -9,7 +9,12 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import { Member, MemberDocument } from '../../schemas/Member.model';
-import { PHPJwtPayload, UserSyncResult, mapMemberType, extractMemberType } from '../../libs/DTO/auth/sso.input';
+import {
+  PHPJwtPayload,
+  UserSyncResult,
+  mapMemberType,
+  extractMemberType,
+} from '../../libs/DTO/auth/sso.input';
 import { SystemRole } from '../../libs/enums/enums';
 import { AuthService } from './auth.service';
 
@@ -25,14 +30,16 @@ export class SSOService {
   ) {
     // CRITICAL: Must be the SAME secret as PHP website
     this.jwtSecretKey = this.configService.get<string>('JWT_SECRET_KEY') || '';
-    
+
     if (!this.jwtSecretKey || this.jwtSecretKey.length < 32) {
-      this.logger.error('❌ JWT_SECRET_KEY is not set or too short in .env file!');
+      this.logger.error(
+        '❌ JWT_SECRET_KEY is not set or too short in .env file!',
+      );
       throw new Error(
         'JWT_SECRET_KEY must be set in .env and be at least 32 characters long',
       );
     }
-    
+
     this.logger.log('✅ SSO Service initialized with JWT_SECRET_KEY');
   }
 
@@ -49,7 +56,9 @@ export class SSOService {
         algorithms: ['HS256'], // PHP typically uses HS256
       }) as PHPJwtPayload;
 
-      this.logger.log(`✅ JWT verified for user: ${decoded.user_id} (${decoded.name})`);
+      this.logger.log(
+        `✅ JWT verified for user: ${decoded.user_id} (${decoded.name})`,
+      );
 
       // Validate required fields for PHP JWT structure
       if (!decoded.user_id || !decoded.name) {
@@ -73,22 +82,33 @@ export class SSOService {
         platform: decoded.platform || 'hrde_archive', // Default platform if not provided
       };
 
-      this.logger.log(`✅ Extracted member_type: ${memberType} from JWT payload`);
+      this.logger.log(
+        `✅ Extracted member_type: ${memberType} from JWT payload`,
+      );
 
       return normalizedPayload;
     } catch (error) {
       // Enhanced error logging
-      if (error.name === 'JsonWebTokenError' && error.message.includes('invalid signature')) {
+      if (
+        error.name === 'JsonWebTokenError' &&
+        error.message.includes('invalid signature')
+      ) {
         this.logger.error(`❌ JWT verification failed: invalid signature`);
-        this.logger.error(`⚠️  This usually means JWT_SECRET_KEY in NestJS doesn't match the secret used by PHP website`);
-        this.logger.error(`⚠️  Current JWT_SECRET_KEY length: ${this.jwtSecretKey?.length || 0} characters`);
-        this.logger.error(`⚠️  Please ensure JWT_SECRET_KEY in .env matches exactly with PHP website's JWT secret`);
+        this.logger.error(
+          `⚠️  This usually means JWT_SECRET_KEY in NestJS doesn't match the secret used by PHP website`,
+        );
+        this.logger.error(
+          `⚠️  Current JWT_SECRET_KEY length: ${this.jwtSecretKey?.length || 0} characters`,
+        );
+        this.logger.error(
+          `⚠️  Please ensure JWT_SECRET_KEY in .env matches exactly with PHP website's JWT secret`,
+        );
         throw new UnauthorizedException(
           'Invalid JWT token: Signature verification failed. ' +
-          'Please ensure JWT_SECRET_KEY in NestJS backend matches the secret used by PHP website.',
+            'Please ensure JWT_SECRET_KEY in NestJS backend matches the secret used by PHP website.',
         );
       }
-      
+
       this.logger.error(`❌ JWT verification failed: ${error.message}`);
 
       if (error.name === 'TokenExpiredError') {
@@ -101,7 +121,9 @@ export class SSOService {
         throw new UnauthorizedException('JWT token not yet valid');
       }
 
-      throw new UnauthorizedException(`JWT verification failed: ${error.message}`);
+      throw new UnauthorizedException(
+        `JWT verification failed: ${error.message}`,
+      );
     }
   }
 
@@ -118,10 +140,10 @@ export class SSOService {
     try {
       // Map PHP member_type to NestJS SystemRole
       const systemRole = mapMemberType(member_type) as SystemRole;
-      
+
       // First try to find by user_id (primary lookup)
       let existingUser = null;
-      
+
       if (user_id) {
         existingUser = await this.memberModel.findOne({ user_id: user_id });
       }
@@ -130,7 +152,9 @@ export class SSOService {
       if (!existingUser && email) {
         existingUser = await this.memberModel.findOne({ email: email });
         if (existingUser) {
-          this.logger.log(`⚠️ Found user by email (${email}) but with different user_id (${existingUser.user_id} -> ${user_id}). Updating user_id.`);
+          this.logger.log(
+            `⚠️ Found user by email (${email}) but with different user_id (${existingUser.user_id} -> ${user_id}). Updating user_id.`,
+          );
         }
       }
 
@@ -138,35 +162,45 @@ export class SSOService {
 
       if (existingUser) {
         // ✅ USER EXISTS - UPDATE user_id, email, and systemRole if different
-        this.logger.log(`🔄 Found existing user in DB for SSO: ${existingUser.user_id || 'no user_id'} -> ${user_id} (${name})`);
-        
+        this.logger.log(
+          `🔄 Found existing user in DB for SSO: ${existingUser.user_id || 'no user_id'} -> ${user_id} (${name})`,
+        );
+
         // UPDATE: user_id if it's different or missing
         if (existingUser.user_id !== user_id) {
-          this.logger.log(`⚠️ User_id changed from ${existingUser.user_id || 'null'} to ${user_id}`);
+          this.logger.log(
+            `⚠️ User_id changed from ${existingUser.user_id || 'null'} to ${user_id}`,
+          );
           existingUser.user_id = user_id;
         }
-        
+
         // UPDATE: email if it's different
         if (existingUser.email !== email) {
-          this.logger.log(`⚠️ Email changed from ${existingUser.email} to ${email}`);
+          this.logger.log(
+            `⚠️ Email changed from ${existingUser.email} to ${email}`,
+          );
           existingUser.email = email;
         }
-        
+
         // ✅ CRITICAL FIX: Update systemRole if it's different from JWT
         // This ensures admin users always have correct role even if database was wrong
         if (existingUser.systemRole !== systemRole) {
-          this.logger.log(`⚠️ SystemRole changed from ${existingUser.systemRole} to ${systemRole} for user ${user_id}`);
+          this.logger.log(
+            `⚠️ SystemRole changed from ${existingUser.systemRole} to ${systemRole} for user ${user_id}`,
+          );
           existingUser.systemRole = systemRole;
         }
-        
+
         // Update displayName if different
         if (existingUser.displayName !== name) {
-          this.logger.log(`⚠️ DisplayName changed from ${existingUser.displayName} to ${name}`);
+          this.logger.log(
+            `⚠️ DisplayName changed from ${existingUser.displayName} to ${name}`,
+          );
           existingUser.displayName = name;
         }
-        
+
         existingUser.lastSeenAt = currentTime;
-        
+
         // updatedAt is automatically managed by Mongoose timestamps
         const updatedUser = await existingUser.save();
 
@@ -200,10 +234,10 @@ export class SSOService {
         };
       }
     } catch (error) {
-      this.logger.error(`❌ User sync failed for ${user_id} (${name}): ${error.message}`);
-      throw new BadRequestException(
-        `Failed to sync user: ${error.message}`,
+      this.logger.error(
+        `❌ User sync failed for ${user_id} (${name}): ${error.message}`,
       );
+      throw new BadRequestException(`Failed to sync user: ${error.message}`);
     }
   }
 
@@ -238,4 +272,3 @@ export class SSOService {
     };
   }
 }
-

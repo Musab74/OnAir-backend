@@ -53,7 +53,7 @@ egress:
       video_codec: H264
       audio_codec: AAC
       video_bitrate: 2000000  # 2 Mbps
-      audio_bitrate: 128000   # 128 kbps
+      audio_bitrate: 192000   # 192 kbps - high quality (increased from 128kbps)
       video_width: 1280
       video_height: 720
       framerate: 30
@@ -65,7 +65,7 @@ egress:
       video_codec: H264
       audio_codec: AAC
       video_bitrate: 2000000
-      audio_bitrate: 128000
+      audio_bitrate: 192000   # 192 kbps - high quality (increased from 128kbps)
       video_width: 1280
       video_height: 720
       framerate: 30

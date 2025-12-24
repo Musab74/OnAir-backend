@@ -85,12 +85,10 @@ export class VodService {
           : null;
 
       // Convert meetingId to string ID if it's a populated object
-      const meetingIdValue = 
-        vod.meetingId && typeof vod.meetingId === 'object' 
-          ? (vod.meetingId as any)._id?.toString() 
+      const meetingIdValue =
+        vod.meetingId && typeof vod.meetingId === 'object'
+          ? (vod.meetingId as any)._id?.toString()
           : vod.meetingId?.toString();
-
-
 
       return {
         ...vod,
@@ -149,9 +147,9 @@ export class VodService {
         : null;
 
     // Convert meetingId to string ID if it's a populated object
-    const meetingIdValue = 
-      vod.meetingId && typeof vod.meetingId === 'object' 
-        ? (vod.meetingId as any)._id?.toString() 
+    const meetingIdValue =
+      vod.meetingId && typeof vod.meetingId === 'object'
+        ? (vod.meetingId as any)._id?.toString()
         : vod.meetingId?.toString();
 
     return {

@@ -34,31 +34,15 @@ export class TranscriptionService {
   private readonly openaiBaseUrl = 'https://api.openai.com/v1';
   private readonly axiosInstance: AxiosInstance;
   private readonly chunkSize: number = 10; // seconds
-  // Support all major languages that OpenAI GPT can translate to/from
+  // ONLY English and Korean supported - strict language restriction
   private readonly supportedLanguages = [
     { code: 'en', name: 'English' },
     { code: 'ko', name: 'Korean' },
-    { code: 'ja', name: 'Japanese' },
-    { code: 'zh', name: 'Chinese' },
-    { code: 'es', name: 'Spanish' },
-    { code: 'fr', name: 'French' },
-    { code: 'de', name: 'German' },
-    { code: 'pt', name: 'Portuguese' },
-    { code: 'uz', name: 'Uzbek' },
-    { code: 'ar', name: 'Arabic' },
-    { code: 'hi', name: 'Hindi' },
-    { code: 'it', name: 'Italian' },
-    { code: 'ru', name: 'Russian' },
-    { code: 'vi', name: 'Vietnamese' },
-    { code: 'th', name: 'Thai' },
-    { code: 'nl', name: 'Dutch' },
-    { code: 'pl', name: 'Polish' },
-    { code: 'tr', name: 'Turkish' },
   ];
 
   constructor(private configService: ConfigService) {
     this.openaiApiKey = this.configService.get<string>('OPENAI_API_KEY');
-    
+
     if (!this.openaiApiKey) {
       this.logger.error('OPENAI_API_KEY is not set in environment variables');
       throw new Error('OPENAI_API_KEY is required');
@@ -68,7 +52,7 @@ export class TranscriptionService {
     this.axiosInstance = axios.create({
       baseURL: this.openaiBaseUrl,
       headers: {
-        'Authorization': `Bearer ${this.openaiApiKey}`,
+        Authorization: `Bearer ${this.openaiApiKey}`,
         'Content-Type': 'multipart/form-data',
       },
       timeout: 30880, // 30 seconds timeout
@@ -90,7 +74,9 @@ export class TranscriptionService {
     mimetype?: string,
   ): Promise<TranscriptionResult> {
     try {
-      this.logger.log(`Starting transcription${language ? ` for language: ${language}` : ' (auto-detect)'}`);
+      this.logger.log(
+        `Starting transcription${language ? ` for language: ${language}` : ' (auto-detect)'}`,
+      );
 
       const formData = new FormData();
 
@@ -101,20 +87,22 @@ export class TranscriptionService {
       } else {
         // Buffer - determine format from mimetype or default to webm
         // OpenAI Whisper supports: flac, m4a, mp3, mp4, mpeg, mpga, oga, ogg, wav, webm
-        const formatMap: Record<string, { ext: string; contentType: string }> = {
-          'audio/webm': { ext: 'webm', contentType: 'audio/webm' },
-          'audio/wav': { ext: 'wav', contentType: 'audio/wav' },
-          'audio/mpeg': { ext: 'mp3', contentType: 'audio/mpeg' },
-          'audio/mp3': { ext: 'mp3', contentType: 'audio/mpeg' },
-          'audio/mp4': { ext: 'm4a', contentType: 'audio/mp4' },
-          'audio/m4a': { ext: 'm4a', contentType: 'audio/mp4' },
-          'audio/ogg': { ext: 'ogg', contentType: 'audio/ogg' },
-          'audio/flac': { ext: 'flac', contentType: 'audio/flac' },
-        };
+        const formatMap: Record<string, { ext: string; contentType: string }> =
+          {
+            'audio/webm': { ext: 'webm', contentType: 'audio/webm' },
+            'audio/wav': { ext: 'wav', contentType: 'audio/wav' },
+            'audio/mpeg': { ext: 'mp3', contentType: 'audio/mpeg' },
+            'audio/mp3': { ext: 'mp3', contentType: 'audio/mpeg' },
+            'audio/mp4': { ext: 'm4a', contentType: 'audio/mp4' },
+            'audio/m4a': { ext: 'm4a', contentType: 'audio/mp4' },
+            'audio/ogg': { ext: 'ogg', contentType: 'audio/ogg' },
+            'audio/flac': { ext: 'flac', contentType: 'audio/flac' },
+          };
 
-        const format = mimetype && formatMap[mimetype] 
-          ? formatMap[mimetype]
-          : { ext: 'webm', contentType: 'audio/webm' }; // Default to webm for browser recordings
+        const format =
+          mimetype && formatMap[mimetype]
+            ? formatMap[mimetype]
+            : { ext: 'webm', contentType: 'audio/webm' }; // Default to webm for browser recordings
 
         this.logger.log(`[OpenAI] Using file format:`, {
           mimetype: mimetype || 'not provided',
@@ -129,7 +117,7 @@ export class TranscriptionService {
       }
 
       formData.append('model', 'whisper-1');
-      
+
       if (language) {
         formData.append('language', language);
       }
@@ -138,7 +126,8 @@ export class TranscriptionService {
       formData.append('response_format', 'json');
 
       this.logger.log(`[OpenAI] Sending transcription request:`, {
-        fileSize: typeof audioFile === 'string' ? 'file path' : audioFile.length,
+        fileSize:
+          typeof audioFile === 'string' ? 'file path' : audioFile.length,
         language: language || 'auto-detect',
         model: 'whisper-1',
       });
@@ -153,19 +142,21 @@ export class TranscriptionService {
 
       // Get detected language from Whisper (it returns language code like 'en', 'ko', etc.)
       const detectedLanguage = response.data.language || 'en'; // Default to English if not detected
-      
+
       const result: TranscriptionResult = {
         text: response.data.text || '',
         language: detectedLanguage, // Use actual detected language, not 'unknown'
         duration: response.data.duration,
       };
-      
-      this.logger.log(`Transcription completed: ${result.text.substring(0, 50)}... (detected language: ${detectedLanguage})`);
+
+      this.logger.log(
+        `Transcription completed: ${result.text.substring(0, 50)}... (detected language: ${detectedLanguage})`,
+      );
       return result;
     } catch (error: any) {
       // Enhanced error logging for OpenAI API errors
       let errorDetails = error.message;
-      
+
       if (error.response) {
         // OpenAI API returned an error response
         errorDetails = `OpenAI API Error (${error.response.status}): ${JSON.stringify(error.response.data)}`;
@@ -184,8 +175,11 @@ export class TranscriptionService {
         errorDetails = `Request setup error: ${error.message}`;
         this.logger.error(`[OpenAI] Request setup error:`, error);
       }
-      
-      this.logger.error(`[OpenAI] Transcription failed: ${errorDetails}`, error.stack);
+
+      this.logger.error(
+        `[OpenAI] Transcription failed: ${errorDetails}`,
+        error.stack,
+      );
       throw new Error(`Transcription failed: ${errorDetails}`);
     }
   }
@@ -203,15 +197,58 @@ export class TranscriptionService {
     targetLanguage: string,
     sourceLanguage?: string,
   ): Promise<TranslationResult> {
+    // Declare variables outside try block so they're accessible in catch
+    let normalizedSource = (sourceLanguage || 'en').toLowerCase().trim();
+    let normalizedTarget = targetLanguage.toLowerCase().trim();
+    
     try {
       // Validate input text
       const trimmedText = text?.trim() || '';
       if (!trimmedText || trimmedText.length < 2) {
-        this.logger.warn(`Skipping translation - text is empty or too short: "${trimmedText}"`);
+        this.logger.warn(
+          `Skipping translation - text is empty or too short: "${trimmedText}"`,
+        );
         return {
           translatedText: '',
-          sourceLanguage: sourceLanguage || 'en', // Default to English instead of unknown
+          sourceLanguage: sourceLanguage || 'en',
           targetLanguage,
+        };
+      }
+
+      // STRICT: Only English and Korean supported
+      normalizedSource = (sourceLanguage || 'en').toLowerCase().trim();
+      normalizedTarget = targetLanguage.toLowerCase().trim();
+
+      // Map common variations
+      if (normalizedSource === 'english' || normalizedSource === 'eng')
+        normalizedSource = 'en';
+      if (normalizedSource === 'korean' || normalizedSource === 'kor')
+        normalizedSource = 'ko';
+      if (normalizedTarget === 'english' || normalizedTarget === 'eng')
+        normalizedTarget = 'en';
+      if (normalizedTarget === 'korean' || normalizedTarget === 'kor')
+        normalizedTarget = 'ko';
+
+      // Validate languages - only accept 'en' or 'ko'
+      if (normalizedSource !== 'en' && normalizedSource !== 'ko') {
+        this.logger.warn(
+          `[translateText] Invalid source language: ${sourceLanguage}, defaulting to 'en'`,
+        );
+        normalizedSource = 'en';
+      }
+      if (normalizedTarget !== 'en' && normalizedTarget !== 'ko') {
+        this.logger.warn(
+          `[translateText] Invalid target language: ${targetLanguage}, defaulting to 'en'`,
+        );
+        normalizedTarget = 'en';
+      }
+
+      // If same language, return original text
+      if (normalizedSource === normalizedTarget) {
+        return {
+          translatedText: trimmedText,
+          sourceLanguage: normalizedSource,
+          targetLanguage: normalizedTarget,
         };
       }
 
@@ -224,17 +261,16 @@ export class TranscriptionService {
       // Use OpenAI Chat API for ultra-fast translation
       // Maximum speed optimizations: minimal model, lowest temperature, minimal tokens, shorter timeout
       // For Korean: Use respectful form (존댓말) - always polite
-      const normalizedTargetLang = targetLanguage.toLowerCase();
-      const isKorean = normalizedTargetLang === 'ko';
-      const languageName = this.getLanguageName(targetLanguage) || targetLanguage;
-      
+      const isKorean = normalizedTarget === 'ko';
+      const languageName = this.getLanguageName(normalizedTarget);
+
       let systemPrompt: string;
       if (isKorean) {
         systemPrompt = `Translate to Korean using respectful form (존댓말). Use polite endings like -습니다, -세요, -어요, -네요. Always use 존댓말, never 반말. Translation only, no explanations.`;
       } else {
         systemPrompt = `Translate the following text to ${languageName}. Provide only the translation, no explanations or additional text.`;
       }
-      
+
       const response = await this.axiosInstance.post(
         '/chat/completions',
         {
@@ -263,13 +299,30 @@ export class TranscriptionService {
         },
       );
 
-      let translatedText = response.data.choices[0]?.message?.content?.trim() || trimmedText;
+      let translatedText =
+        response.data.choices[0]?.message?.content?.trim() || trimmedText;
 
       // Filter vulgar words from translation as well
       if (this.containsVulgarWords(translatedText)) {
-        this.logger.warn(`[Translation] Rejected translation - contains vulgar words: "${translatedText}"`);
+        this.logger.error(
+          `[Translation] ❌ TRANSLATION REJECTED - contains vulgar words: "${translatedText.substring(0, 50)}"`,
+        );
         // Return empty translation instead of vulgar content
         translatedText = '';
+      }
+
+      // Check if translation is actually empty (API returned empty or was filtered)
+      if (!translatedText || translatedText.trim().length === 0) {
+        this.logger.error(
+          `[Translation] ❌ TRANSLATION RESULT IS EMPTY for ${targetLanguage}. Original text: "${trimmedText.substring(0, 50)}"`,
+        );
+        // Don't return empty - return original to prevent silent failure
+        // But log it as an error so we know it happened
+        return {
+          translatedText: trimmedText, // Return original to prevent silent skip
+          sourceLanguage: normalizedSource,
+          targetLanguage: normalizedTarget,
+        };
       }
 
       const result: TranslationResult = {
@@ -284,19 +337,26 @@ export class TranscriptionService {
     } catch (error: any) {
       // Log error but don't throw - always return something to prevent speech loss
       const errorMsg = error.message || 'Unknown error';
-      const isTimeout = errorMsg.includes('timeout') || errorMsg.includes('ETIMEDOUT');
-      
+      const isTimeout =
+        errorMsg.includes('timeout') || errorMsg.includes('ETIMEDOUT');
+
       if (isTimeout) {
-        this.logger.warn(`[Translation] Timeout for ${targetLanguage} - using original text`);
+        this.logger.error(
+          `[Translation] ❌ TIMEOUT for ${targetLanguage} after 1.5s. Text: "${text.substring(0, 50)}"`,
+        );
       } else {
-        this.logger.error(`[Translation] Failed for ${targetLanguage}: ${errorMsg}`);
+        this.logger.error(
+          `[Translation] ❌ FAILED for ${targetLanguage}: ${errorMsg}. Text: "${text.substring(0, 50)}"`,
+        );
       }
-      
-      // Always return original text if translation fails - never lose speech
+
+      // Return empty instead of original text - original is wrong language!
+      // This will trigger error notification in gateway
+      // normalizedSource and normalizedTarget are now in scope (declared outside try block)
       return {
-        translatedText: text, // Fallback to original to prevent speech loss
-        sourceLanguage: sourceLanguage || 'unknown',
-        targetLanguage,
+        translatedText: '', // Return empty to trigger error handling
+        sourceLanguage: normalizedSource || 'unknown',
+        targetLanguage: normalizedTarget,
       };
     }
   }
@@ -313,17 +373,26 @@ export class TranscriptionService {
     audioFile: Buffer | string,
     targetLanguage: string,
     mimetype?: string,
-  ): Promise<{ transcription: TranscriptionResult; translation: TranslationResult }> {
+  ): Promise<{
+    transcription: TranscriptionResult;
+    translation: TranslationResult;
+  }> {
     try {
       // First, transcribe the audio
-      const transcription = await this.transcribeAudio(audioFile, undefined, mimetype);
+      const transcription = await this.transcribeAudio(
+        audioFile,
+        undefined,
+        mimetype,
+      );
 
       // Validate transcription text - skip if empty or too short
       const trimmedText = transcription.text?.trim() || '';
       const minTextLength = 2; // Minimum characters to consider valid
 
       if (trimmedText.length < minTextLength) {
-        this.logger.debug(`Skipping translation - text too short: "${trimmedText}" (${trimmedText.length} chars)`);
+        this.logger.debug(
+          `Skipping translation - text too short: "${trimmedText}" (${trimmedText.length} chars)`,
+        );
         // Return empty translation result
         return {
           transcription,
@@ -335,17 +404,38 @@ export class TranscriptionService {
         };
       }
 
-      // Translate if source and target languages are different
+      // STRICT: Only English and Korean supported
       // Normalize language codes (Whisper returns 'en', 'ko', etc.)
-      const sourceLang = transcription.language || 'en';
-      const normalizedSource = sourceLang.toLowerCase();
-      const normalizedTarget = targetLanguage.toLowerCase();
-      
-      // Accept any language - OpenAI GPT can translate between any languages
-      // Normalize to lowercase for comparison
-      const finalSourceLang = normalizedSource;
+      let sourceLang = (transcription.language || 'en').toLowerCase().trim();
+      let normalizedTarget = targetLanguage.toLowerCase().trim();
+
+      // Map common variations to standard codes
+      if (sourceLang === 'english' || sourceLang === 'eng') sourceLang = 'en';
+      if (sourceLang === 'korean' || sourceLang === 'kor') sourceLang = 'ko';
+      if (normalizedTarget === 'english' || normalizedTarget === 'eng')
+        normalizedTarget = 'en';
+      if (normalizedTarget === 'korean' || normalizedTarget === 'kor')
+        normalizedTarget = 'ko';
+
+      // Validate source language - only accept 'en' or 'ko'
+      if (sourceLang !== 'en' && sourceLang !== 'ko') {
+        this.logger.warn(
+          `[transcribeAndTranslate] Unsupported source language: ${sourceLang}, defaulting to 'en'`,
+        );
+        sourceLang = 'en';
+      }
+
+      // Validate target language - only accept 'en' or 'ko'
+      if (normalizedTarget !== 'en' && normalizedTarget !== 'ko') {
+        this.logger.warn(
+          `[transcribeAndTranslate] Unsupported target language: ${normalizedTarget}, defaulting to 'en'`,
+        );
+        normalizedTarget = 'en';
+      }
+
+      const finalSourceLang = sourceLang;
       const finalTargetLang = normalizedTarget;
-      
+
       // Reduced logging for production performance
       // this.logger.log(`[Translation] Language mapping:`, {
       //   detected: sourceLang,
@@ -356,7 +446,7 @@ export class TranscriptionService {
       //   finalTargetLang,
       //   willTranslate: finalSourceLang !== finalTargetLang,
       // });
-      
+
       if (finalSourceLang === finalTargetLang) {
         // Same language - no translation needed
         // this.logger.debug(`Skipping translation - same language: ${finalSourceLang}`);
@@ -380,18 +470,18 @@ export class TranscriptionService {
         finalSourceLang,
       );
 
-        return {
-          transcription: {
-            ...transcription,
-            text: trimmedText,
-            language: finalSourceLang, // Use normalized language
-          },
-          translation: {
-            ...translation,
-            sourceLanguage: finalSourceLang,
-            targetLanguage: finalTargetLang,
-          },
-        };
+      return {
+        transcription: {
+          ...transcription,
+          text: trimmedText,
+          language: finalSourceLang, // Use normalized language
+        },
+        translation: {
+          ...translation,
+          sourceLanguage: finalSourceLang,
+          targetLanguage: finalTargetLang,
+        },
+      };
     } catch (error: any) {
       this.logger.error(`Transcribe and translate failed: ${error.message}`);
       throw error;
@@ -437,38 +527,22 @@ export class TranscriptionService {
 
   /**
    * Get language name from code
-   * @param code - Language code
+   * @param code - Language code (only 'en' or 'ko' supported)
    * @returns Language name
    */
   private getLanguageName(code: string): string {
-    const normalizedCode = code.toLowerCase();
-    const lang = this.supportedLanguages.find((l) => l.code.toLowerCase() === normalizedCode);
+    const normalizedCode = code.toLowerCase().trim();
+    const lang = this.supportedLanguages.find(
+      (l) => l.code.toLowerCase() === normalizedCode,
+    );
     if (lang) return lang.name;
-    
-    // If not in our list, return a human-readable version of the code
-    // Common language code mappings for better translation prompts
-    const languageNames: Record<string, string> = {
-      'en': 'English',
-      'ko': 'Korean',
-      'ja': 'Japanese',
-      'zh': 'Chinese',
-      'es': 'Spanish',
-      'fr': 'French',
-      'de': 'German',
-      'pt': 'Portuguese',
-      'uz': 'Uzbek',
-      'ar': 'Arabic',
-      'hi': 'Hindi',
-      'it': 'Italian',
-      'ru': 'Russian',
-      'vi': 'Vietnamese',
-      'th': 'Thai',
-      'nl': 'Dutch',
-      'pl': 'Polish',
-      'tr': 'Turkish',
-    };
-    
-    return languageNames[normalizedCode] || normalizedCode.toUpperCase();
+
+    // STRICT: Only English and Korean supported
+    // If not in our list, default to English
+    this.logger.warn(
+      `[getLanguageName] Unsupported language code: ${code}, defaulting to English`,
+    );
+    return 'English';
   }
 
   /**
@@ -476,24 +550,51 @@ export class TranscriptionService {
    */
   private containsVulgarWords(text: string): boolean {
     const lowerText = text.toLowerCase();
-    
+
     // Common vulgar/profane words (English)
     const vulgarWords = [
-      'fuck', 'shit', 'damn', 'hell', 'ass', 'bitch', 'bastard', 'crap',
-      'piss', 'dick', 'cock', 'pussy', 'cunt', 'whore', 'slut', 'fag',
-      'nigger', 'nigga', 'retard', 'idiot', 'stupid', 'dumb', 'moron',
-      'damn', 'goddamn', 'bloody', 'screw', 'screw you', 'screw off',
+      'fuck',
+      'shit',
+      'damn',
+      'hell',
+      'ass',
+      'bitch',
+      'bastard',
+      'crap',
+      'piss',
+      'dick',
+      'cock',
+      'pussy',
+      'cunt',
+      'whore',
+      'slut',
+      'fag',
+      'nigger',
+      'nigga',
+      'retard',
+      'idiot',
+      'stupid',
+      'dumb',
+      'moron',
+      'damn',
+      'goddamn',
+      'bloody',
+      'screw',
+      'screw you',
+      'screw off',
       // Add more as needed
     ];
-    
+
     // Check for vulgar words
     for (const word of vulgarWords) {
       if (lowerText.includes(word)) {
-        this.logger.debug(`[Quality] Rejected - contains vulgar word: "${text}"`);
+        this.logger.debug(
+          `[Quality] Rejected - contains vulgar word: "${text}"`,
+        );
         return true;
       }
     }
-    
+
     return false;
   }
 
@@ -507,9 +608,10 @@ export class TranscriptionService {
     }
 
     const trimmed = text.trim();
-    
+
     // Minimum length check - too short might be noise
-    if (trimmed.length < 3) { // Minimum 3 characters
+    if (trimmed.length < 3) {
+      // Minimum 3 characters
       this.logger.debug(`[Quality] Rejected - too short: "${trimmed}"`);
       return false;
     }
@@ -547,13 +649,15 @@ export class TranscriptionService {
 
     for (const pattern of hallucinationPatterns) {
       if (pattern.test(trimmed)) {
-        this.logger.debug(`[Quality] Rejected - hallucination pattern: "${trimmed}"`);
+        this.logger.debug(
+          `[Quality] Rejected - hallucination pattern: "${trimmed}"`,
+        );
         return false;
       }
     }
 
     // Check if it's mostly punctuation or numbers (likely not real speech)
-    const words = trimmed.split(/\s+/).filter(w => w.length > 0);
+    const words = trimmed.split(/\s+/).filter((w) => w.length > 0);
     const wordCount = words.length;
     if (wordCount === 0) {
       this.logger.debug(`[Quality] Rejected - no words: "${trimmed}"`);
@@ -562,41 +666,72 @@ export class TranscriptionService {
 
     // Reject single-word transcriptions that are too short (likely noise)
     if (wordCount === 1 && trimmed.length < 4) {
-      this.logger.debug(`[Quality] Rejected - single short word (likely noise): "${trimmed}"`);
+      this.logger.debug(
+        `[Quality] Rejected - single short word (likely noise): "${trimmed}"`,
+      );
       return false;
     }
 
     // Check for too many repeated characters (likely noise)
     const repeatedCharPattern = /(.)\1{3,}/; // Same character 4+ times (reduced from 5)
     if (repeatedCharPattern.test(trimmed)) {
-      this.logger.debug(`[Quality] Rejected - repeated characters: "${trimmed}"`);
+      this.logger.debug(
+        `[Quality] Rejected - repeated characters: "${trimmed}"`,
+      );
       return false;
     }
 
     // Check if it's mostly special characters (stricter threshold)
     const alphaNumericCount = (trimmed.match(/[a-zA-Z0-9가-힣]/g) || []).length;
     const totalChars = trimmed.length;
-    if (totalChars > 0 && alphaNumericCount / totalChars < 0.6) { // Increased from 0.5 to 0.6
-      this.logger.debug(`[Quality] Rejected - too many special chars: "${trimmed}"`);
+    if (totalChars > 0 && alphaNumericCount / totalChars < 0.6) {
+      // Increased from 0.5 to 0.6
+      this.logger.debug(
+        `[Quality] Rejected - too many special chars: "${trimmed}"`,
+      );
       return false;
     }
 
     // Check for suspicious patterns that indicate background noise or hallucinations
     // Words that don't make sense in context
-    const suspiciousWords = ['background', 'noise', 'static', 'silence', 'unclear', 'inaudible', 'muffled'];
+    const suspiciousWords = [
+      'background',
+      'noise',
+      'static',
+      'silence',
+      'unclear',
+      'inaudible',
+      'muffled',
+    ];
     const lowerText = trimmed.toLowerCase();
     for (const word of suspiciousWords) {
       if (lowerText.includes(word)) {
-        this.logger.debug(`[Quality] Rejected - contains suspicious word: "${trimmed}"`);
+        this.logger.debug(
+          `[Quality] Rejected - contains suspicious word: "${trimmed}"`,
+        );
         return false;
       }
     }
 
     // Check for too many filler words relative to content words
-    const fillerWords = ['uh', 'um', 'ah', 'er', 'hmm', 'eh', 'oh', 'like', 'you know'];
-    const fillerCount = words.filter(w => fillerWords.includes(w.toLowerCase())).length;
+    const fillerWords = [
+      'uh',
+      'um',
+      'ah',
+      'er',
+      'hmm',
+      'eh',
+      'oh',
+      'like',
+      'you know',
+    ];
+    const fillerCount = words.filter((w) =>
+      fillerWords.includes(w.toLowerCase()),
+    ).length;
     if (wordCount > 0 && fillerCount / wordCount > 0.5) {
-      this.logger.debug(`[Quality] Rejected - too many filler words: "${trimmed}"`);
+      this.logger.debug(
+        `[Quality] Rejected - too many filler words: "${trimmed}"`,
+      );
       return false;
     }
 
@@ -626,4 +761,3 @@ export class TranscriptionService {
     return true;
   }
 }
-

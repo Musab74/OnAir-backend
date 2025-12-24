@@ -32,7 +32,8 @@ export class MeetingMaterialController {
   private readonly logger = new Logger(MeetingMaterialController.name);
 
   constructor(
-    @InjectModel(Meeting.name) private readonly meetingModel: Model<MeetingDocument>,
+    @InjectModel(Meeting.name)
+    private readonly meetingModel: Model<MeetingDocument>,
   ) {}
 
   @Post(':meetingId')
@@ -43,8 +44,7 @@ export class MeetingMaterialController {
           cb(null, MATERIALS_DIR);
         },
         filename: (req, file, cb) => {
-          const meetingId =
-            (req.params && req.params.meetingId) || 'meeting';
+          const meetingId = (req.params && req.params.meetingId) || 'meeting';
           const fileExt = extname(file.originalname) || '';
           const sanitizedExt = fileExt.replace(/[^a-zA-Z0-9.\-]/g, '');
           const finalExt = sanitizedExt || '.bin';
@@ -78,10 +78,7 @@ export class MeetingMaterialController {
 
     // If a material already exists, remove the old file
     if (meeting.materialStoredName) {
-      const previousPath = path.join(
-        MATERIALS_DIR,
-        meeting.materialStoredName,
-      );
+      const previousPath = path.join(MATERIALS_DIR, meeting.materialStoredName);
       if (fs.existsSync(previousPath)) {
         try {
           fs.unlinkSync(previousPath);
@@ -125,19 +122,13 @@ export class MeetingMaterialController {
     @Param('meetingId') meetingId: string,
     @Res() res: Response,
   ) {
-    const meeting = await this.meetingModel
-      .findById(meetingId)
-      .lean()
-      .exec();
+    const meeting = await this.meetingModel.findById(meetingId).lean().exec();
 
     if (!meeting || !meeting.materialStoredName) {
       throw new NotFoundException('No material uploaded for this meeting');
     }
 
-    const materialPath = path.join(
-      MATERIALS_DIR,
-      meeting.materialStoredName,
-    );
+    const materialPath = path.join(MATERIALS_DIR, meeting.materialStoredName);
 
     if (!fs.existsSync(materialPath)) {
       throw new NotFoundException('Material file not found on server');
@@ -149,15 +140,11 @@ export class MeetingMaterialController {
     );
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${
-        encodeURIComponent(
-          meeting.materialOriginalName || meeting.materialStoredName,
-        )
-      }"`,
+      `attachment; filename="${encodeURIComponent(
+        meeting.materialOriginalName || meeting.materialStoredName,
+      )}"`,
     );
 
     return res.sendFile(materialPath);
   }
 }
-
-

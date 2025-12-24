@@ -4,7 +4,10 @@ import { MeetingService } from './meeting.service';
 import { MeetingResolver } from './meeting.resolver';
 import { Meeting, MeetingSchema } from '../../schemas/Meeting.model';
 import { Member, MemberSchema } from '../../schemas/Member.model';
-import { Participant, ParticipantSchema } from '../../schemas/Participant.model';
+import {
+  Participant,
+  ParticipantSchema,
+} from '../../schemas/Participant.model';
 import { AuthModule } from '../auth/auth.module';
 import { LivekitService } from '../signaling/livekit.service';
 import { ParticipantModule } from '../participants/participant.module';

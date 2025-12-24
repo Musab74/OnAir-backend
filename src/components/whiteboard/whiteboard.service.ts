@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Meeting } from '../../schemas/Meeting.model';
@@ -26,8 +31,10 @@ export class WhiteboardService {
       }
 
       // Check if user is host
-      const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId) || 
-                     (meeting.currentHostId && MeetingUtils.isMeetingHost(meeting.currentHostId, userId));
+      const isHost =
+        MeetingUtils.isMeetingHost(meeting.hostId, userId) ||
+        (meeting.currentHostId &&
+          MeetingUtils.isMeetingHost(meeting.currentHostId, userId));
 
       return isHost;
     } catch (error) {
@@ -39,10 +46,15 @@ export class WhiteboardService {
   /**
    * Validate whiteboard permission
    */
-  async validateWhiteboardPermission(meetingId: string, userId: string): Promise<void> {
+  async validateWhiteboardPermission(
+    meetingId: string,
+    userId: string,
+  ): Promise<void> {
     const canUse = await this.canUseWhiteboard(meetingId, userId);
     if (!canUse) {
-      throw new ForbiddenException('Only the meeting host can use the whiteboard');
+      throw new ForbiddenException(
+        'Only the meeting host can use the whiteboard',
+      );
     }
   }
 
@@ -66,13 +78,3 @@ export class WhiteboardService {
     };
   }
 }
-
-
-
-
-
-
-
-
-
-

@@ -74,8 +74,8 @@ export class ParticipantWithLoginInfo {
   @Field()
   status: string; // 🔧 FIX: Add status field for frontend filtering
 
-@Field({ nullable: true })
-ipAddress?: string;
+  @Field({ nullable: true })
+  ipAddress?: string;
 
   @Field()
   micState: string;

@@ -33,7 +33,7 @@ interface AuthenticatedSocket extends Socket {
       'https://live.hrdeedu.co.kr',
       'https://api.hrdeedu.co.kr',
       'http://localhost:3088',
-      'http://localhost:3001'
+      'http://localhost:3001',
     ],
     credentials: true,
   },
@@ -48,14 +48,25 @@ export class SignalingGateway
 
   private connectedUsers = new Map<string, AuthenticatedSocket>();
   private roomUsers = new Map<string, Set<string>>();
-  private raisedHands = new Map<string, { userId: string; displayName: string; raisedAt: Date; timeoutId: NodeJS.Timeout }>();
+  private raisedHands = new Map<
+    string,
+    {
+      userId: string;
+      displayName: string;
+      raisedAt: Date;
+      timeoutId: NodeJS.Timeout;
+    }
+  >();
   private participantHeartbeats = new Map<string, NodeJS.Timeout>(); // Track heartbeat timeouts per participant
-  
+
   // OPTIMIZED: Track last DB update time to reduce database load
   private lastHeartbeatUpdate = new Map<string, number>();
-  
+
   // ✅ FIX: Track disconnected users with grace period for reconnection
-  private disconnectedUsers = new Map<string, { disconnectedAt: number; timeoutId: NodeJS.Timeout }>();
+  private disconnectedUsers = new Map<
+    string,
+    { disconnectedAt: number; timeoutId: NodeJS.Timeout }
+  >();
   private readonly RECONNECTION_GRACE_PERIOD_MS = 60000; // 60 seconds grace period
 
   constructor(
@@ -66,31 +77,40 @@ export class SignalingGateway
   ) {
     // Listen for global meeting start events
     if ((global as any).meetingStartEmitter) {
-      (global as any).meetingStartEmitter.on('meetingStarted', (meetingId: string) => {
-        this.notifyMeetingStarted(meetingId);
-      });
+      (global as any).meetingStartEmitter.on(
+        'meetingStarted',
+        (meetingId: string) => {
+          this.notifyMeetingStarted(meetingId);
+        },
+      );
     }
-    
+
     // ✅ FIX: Listen for meeting end events
     if (!(global as any).meetingEndEmitter) {
       const EventEmitter = require('events');
       (global as any).meetingEndEmitter = new EventEmitter();
     }
-    (global as any).meetingEndEmitter.on('meetingEnded', (meetingId: string) => {
-      this.notifyMeetingEnded(meetingId);
-    });
-    
+    (global as any).meetingEndEmitter.on(
+      'meetingEnded',
+      (meetingId: string) => {
+        this.notifyMeetingEnded(meetingId);
+      },
+    );
+
     // ✅ CRITICAL FIX: Listen for heartbeat events from ParticipantService
     // This handles cases where heartbeats come via HTTP/GraphQL (not WebSocket)
     if (!(global as any).heartbeatEmitter) {
       const EventEmitter = require('events');
       (global as any).heartbeatEmitter = new EventEmitter();
     }
-    (global as any).heartbeatEmitter.on('heartbeatReceived', ({ userId, meetingId }: { userId: string; meetingId: string }) => {
-      this.handleHeartbeatReceived(userId, meetingId);
-    });
+    (global as any).heartbeatEmitter.on(
+      'heartbeatReceived',
+      ({ userId, meetingId }: { userId: string; meetingId: string }) => {
+        this.handleHeartbeatReceived(userId, meetingId);
+      },
+    );
   }
-  
+
   /**
    * ✅ CRITICAL FIX: Handle heartbeat received from ParticipantService (HTTP/GraphQL heartbeats)
    * This cancels grace period if user is in disconnectedUsers, preventing false LEFT status
@@ -101,13 +121,15 @@ export class SignalingGateway
       if (gracePeriod) {
         clearTimeout(gracePeriod.timeoutId);
         this.disconnectedUsers.delete(userId);
-        console.log(`[SignalingGateway] User ${userId} sent HTTP heartbeat while in grace period, canceling LEFT status`);
-        
+        console.log(
+          `[SignalingGateway] User ${userId} sent HTTP heartbeat while in grace period, canceling LEFT status`,
+        );
+
         // Notify that user is still active
         this.server.to(meetingId).emit('USER_RECONNECTED', {
           userId: userId,
           socketId: null, // No socket ID since this is HTTP heartbeat
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
     }
@@ -125,7 +147,7 @@ export class SignalingGateway
           userId,
           token,
           meetingId,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
         return;
       }
@@ -154,7 +176,7 @@ export class SignalingGateway
         client.disconnect();
         return;
       }
-      
+
       const user = await this.memberService.getProfile(payload.sub);
 
       if (!user) {
@@ -165,15 +187,17 @@ export class SignalingGateway
 
       client.user = user;
       this.connectedUsers.set(client.id, client);
-      
+
       // ✅ FIX: If user was in grace period, cancel it (they reconnected!)
       const userId = user._id;
       const gracePeriod = this.disconnectedUsers.get(userId);
       if (gracePeriod) {
         clearTimeout(gracePeriod.timeoutId);
         this.disconnectedUsers.delete(userId);
-        console.log(`[SignalingGateway] User ${userId} reconnected within grace period, canceling LEFT status`);
-        
+        console.log(
+          `[SignalingGateway] User ${userId} reconnected within grace period, canceling LEFT status`,
+        );
+
         // Notify that user reconnected
         // Get all meetings this user might be in
         const activeMeetings = new Set<string>();
@@ -182,28 +206,27 @@ export class SignalingGateway
             activeMeetings.add(roomName);
           }
         }
-        
+
         for (const meetingId of activeMeetings) {
           this.server.to(meetingId).emit('USER_RECONNECTED', {
             userId: userId,
             displayName: user.displayName,
             socketId: client.id,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           });
         }
       }
-      
+
       // Send success message to client
-      client.emit('CONNECTION_SUCCESS', { 
+      client.emit('CONNECTION_SUCCESS', {
         message: 'Successfully connected to chat server',
         user: {
           _id: user._id,
           displayName: user.displayName,
           email: user.email,
-          systemRole: user.systemRole
-        }
+          systemRole: user.systemRole,
+        },
       });
-      
     } catch (error) {
       client.emit('ERROR', { message: 'Connection failed: ' + error.message });
       client.disconnect();
@@ -213,7 +236,7 @@ export class SignalingGateway
   async handleDisconnect(client: AuthenticatedSocket) {
     if (client.user) {
       const userId = client.user._id;
-      
+
       // Clean up raised hands for this user
       this.cleanupUserHands(userId);
 
@@ -223,7 +246,7 @@ export class SignalingGateway
         clearTimeout(heartbeatTimeout);
         this.participantHeartbeats.delete(userId);
       }
-      
+
       // Clean up heartbeat tracking
       this.lastHeartbeatUpdate.delete(userId);
 
@@ -240,36 +263,51 @@ export class SignalingGateway
           // ✅ CRITICAL FIX: Check if user reconnected OR is still sending heartbeats
           if (this.disconnectedUsers.has(userId)) {
             // Check if user is still sending heartbeats (they might be connected via HTTP even if WebSocket disconnected)
-            const hasRecentHeartbeat = await this.participantService.checkRecentHeartbeat(userId, 120000); // Check last 2 minutes
-            
+            const hasRecentHeartbeat =
+              await this.participantService.checkRecentHeartbeat(
+                userId,
+                120000,
+              ); // Check last 2 minutes
+
             if (hasRecentHeartbeat) {
               // User is still active (sending heartbeats), cancel grace period
-              console.log(`[SignalingGateway] User ${userId} is still sending heartbeats, canceling LEFT status`);
+              console.log(
+                `[SignalingGateway] User ${userId} is still sending heartbeats, canceling LEFT status`,
+              );
               this.disconnectedUsers.delete(userId);
               return;
             }
-            
+
             // Check if user reconnected via WebSocket (if they did, they won't be in disconnectedUsers anymore)
             // Double-check: user might have reconnected but we missed it
             const stillDisconnected = this.disconnectedUsers.has(userId);
             if (stillDisconnected) {
-              console.log(`[SignalingGateway] Grace period expired for user ${userId}, marking as LEFT`);
-              await this.participantService.markParticipantAsLeftAcrossAllMeetings(userId);
+              console.log(
+                `[SignalingGateway] Grace period expired for user ${userId}, marking as LEFT`,
+              );
+              await this.participantService.markParticipantAsLeftAcrossAllMeetings(
+                userId,
+              );
               this.disconnectedUsers.delete(userId);
             }
           }
         } catch (error) {
-          console.error(`[SignalingGateway] Error marking user as LEFT after grace period:`, error);
+          console.error(
+            `[SignalingGateway] Error marking user as LEFT after grace period:`,
+            error,
+          );
         }
       }, this.RECONNECTION_GRACE_PERIOD_MS);
 
       // Track disconnected user with grace period
       this.disconnectedUsers.set(userId, {
         disconnectedAt: Date.now(),
-        timeoutId
+        timeoutId,
       });
 
-      console.log(`[SignalingGateway] User ${userId} disconnected, grace period started (${this.RECONNECTION_GRACE_PERIOD_MS}ms)`);
+      console.log(
+        `[SignalingGateway] User ${userId} disconnected, grace period started (${this.RECONNECTION_GRACE_PERIOD_MS}ms)`,
+      );
 
       // Get all meetings this user was in by checking room users
       const activeMeetings = new Set<string>();
@@ -291,7 +329,7 @@ export class SignalingGateway
           displayName: client.user.displayName,
           socketId: client.id,
           timestamp: new Date().toISOString(),
-          reconnecting: true // Indicate user might reconnect
+          reconnecting: true, // Indicate user might reconnect
         });
       }
 
@@ -394,11 +432,13 @@ export class SignalingGateway
       const hasAccess = await this.chatService.checkMeetingAccess(
         roomName,
         client.user._id,
-        client.user.systemRole
+        client.user.systemRole,
       );
 
       if (!hasAccess) {
-        client.emit('ERROR', { message: 'You do not have access to this meeting chat' });
+        client.emit('ERROR', {
+          message: 'You do not have access to this meeting chat',
+        });
         return;
       }
 
@@ -445,11 +485,13 @@ export class SignalingGateway
       const hasAccess = await this.chatService.checkMeetingAccess(
         meetingId,
         client.user._id,
-        client.user.systemRole
+        client.user.systemRole,
       );
 
       if (!hasAccess) {
-        client.emit('ERROR', { message: 'You do not have access to this meeting chat' });
+        client.emit('ERROR', {
+          message: 'You do not have access to this meeting chat',
+        });
         return;
       }
 
@@ -463,7 +505,8 @@ export class SignalingGateway
       this.roomUsers.get(meetingId)!.add(client.id);
 
       // Load existing messages from database
-      const existingMessages = await this.chatService.getMessagesByMeeting(meetingId);
+      const existingMessages =
+        await this.chatService.getMessagesByMeeting(meetingId);
 
       // Send existing messages to the joining user
       client.emit('CHAT_MESSAGES_LOADED', { messages: existingMessages });
@@ -474,10 +517,10 @@ export class SignalingGateway
           const user = this.connectedUsers.get(socketId);
           return user
             ? {
-              userId: user.user!._id,
-              displayName: user.user!.displayName,
-              socketId,
-            }
+                userId: user.user!._id,
+                displayName: user.user!.displayName,
+                socketId,
+              }
             : null;
         })
         .filter(Boolean);
@@ -541,14 +584,18 @@ export class SignalingGateway
       }
 
       // Check permissions
-      const isHost = client.user.systemRole === SystemRole.ADMIN || client.user.systemRole === SystemRole.TUTOR;
+      const isHost =
+        client.user.systemRole === SystemRole.ADMIN ||
+        client.user.systemRole === SystemRole.TUTOR;
       // Convert both to strings for reliable comparison (ObjectId vs string)
       const messageUserId = String(message.userId || '');
       const clientUserId = String(client.user._id || '');
       const isOwner = messageUserId === clientUserId;
 
       if (!isHost && !isOwner) {
-        client.emit('ERROR', { message: 'Insufficient permissions to delete message' });
+        client.emit('ERROR', {
+          message: 'Insufficient permissions to delete message',
+        });
         return;
       }
 
@@ -574,7 +621,8 @@ export class SignalingGateway
 
   @SubscribeMessage('HOST_LOWER_HAND')
   async handleHostLowerHand(
-    @MessageBody() data: { meetingId: string; participantId: string; reason?: string },
+    @MessageBody()
+    data: { meetingId: string; participantId: string; reason?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.user) return;
@@ -584,12 +632,12 @@ export class SignalingGateway
     try {
       // Use the new WebSocket-only system
       const handKey = `${meetingId}:${participantId}`;
-      
+
       // Check if hand is raised in our in-memory system
       if (!this.raisedHands.has(handKey)) {
-        client.emit('HOST_LOWER_HAND_ERROR', { 
-          message: 'Participant\'s hand is not currently raised',
-          participantId 
+        client.emit('HOST_LOWER_HAND_ERROR', {
+          message: "Participant's hand is not currently raised",
+          participantId,
         });
         return;
       }
@@ -616,16 +664,16 @@ export class SignalingGateway
       // Send confirmation to the host
       client.emit('HOST_LOWER_HAND_SUCCESS', {
         success: true,
-        message: 'Participant\'s hand lowered successfully',
+        message: "Participant's hand lowered successfully",
         participantId,
         hasHandRaised: false,
         handLoweredAt: new Date(),
         reason,
       });
     } catch (error) {
-      client.emit('HOST_LOWER_HAND_ERROR', { 
+      client.emit('HOST_LOWER_HAND_ERROR', {
         message: error.message || 'Failed to lower hand as host',
-        participantId 
+        participantId,
       });
     }
   }
@@ -650,7 +698,7 @@ export class SignalingGateway
           loweredHands.push({
             userId: handInfo.userId,
             displayName: handInfo.displayName,
-            loweredAt: new Date()
+            loweredAt: new Date(),
           });
           handsToRemove.push(handKey);
         }
@@ -673,19 +721,19 @@ export class SignalingGateway
         loweredAt: new Date(),
         meetingId,
         loweredCount: loweredHands.length,
-        loweredHands
+        loweredHands,
       });
 
       // Send confirmation to the host
-      client.emit('LOWER_ALL_HANDS_SUCCESS', { 
+      client.emit('LOWER_ALL_HANDS_SUCCESS', {
         success: true,
         message: `Successfully lowered ${loweredHands.length} hands`,
-        loweredCount: loweredHands.length 
+        loweredCount: loweredHands.length,
       });
     } catch (error) {
-      client.emit('LOWER_ALL_HANDS_ERROR', { 
+      client.emit('LOWER_ALL_HANDS_ERROR', {
         message: error.message || 'Failed to lower all hands',
-        meetingId 
+        meetingId,
       });
     }
   }
@@ -851,7 +899,10 @@ export class SignalingGateway
       const { meetingId, participantId } = data;
 
       if (client.user?._id) {
-        await this.participantService.markParticipantAsLeftInMeeting(client.user._id, meetingId);
+        await this.participantService.markParticipantAsLeftInMeeting(
+          client.user._id,
+          meetingId,
+        );
       }
 
       // Leave the waiting room
@@ -888,7 +939,7 @@ export class SignalingGateway
 
       // Join host room
       await client.join(`host_${meetingId}`);
-      
+
       // Also join the main meeting room for hand raise events
       await client.join(meetingId);
 
@@ -938,11 +989,14 @@ export class SignalingGateway
       });
 
       // FIXED: Notify the specific participant that they've been admitted
-      client.to(`waiting_${meetingId}`).emit('PARTICIPANT_ADMITTED_TO_MEETING', {
-        participantId,
-        meetingId,
-        message: 'You have been admitted to the meeting - redirecting to live room',
-      });
+      client
+        .to(`waiting_${meetingId}`)
+        .emit('PARTICIPANT_ADMITTED_TO_MEETING', {
+          participantId,
+          meetingId,
+          message:
+            'You have been admitted to the meeting - redirecting to live room',
+        });
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to approve participant' });
     }
@@ -1034,7 +1088,7 @@ export class SignalingGateway
   }
 
   // ===== MEETING START NOTIFICATION =====
-  
+
   // Public method to notify all waiting participants when meeting starts
   async notifyMeetingStarted(meetingId: string) {
     try {
@@ -1042,13 +1096,15 @@ export class SignalingGateway
       this.server.to(`waiting_${meetingId}`).emit('MEETING_STATUS_CHANGED', {
         status: 'LIVE',
         meetingId,
-        message: 'Meeting has started - you will be redirected to the live room',
+        message:
+          'Meeting has started - you will be redirected to the live room',
       });
 
       // Also emit individual admission events for each waiting participant
       this.server.to(`waiting_${meetingId}`).emit('ALL_PARTICIPANTS_ADMITTED', {
         meetingId,
-        message: 'All participants have been admitted - redirecting to live room',
+        message:
+          'All participants have been admitted - redirecting to live room',
       });
     } catch (error) {
       // Error silently handled
@@ -1056,7 +1112,7 @@ export class SignalingGateway
   }
 
   // ===== MEETING END NOTIFICATION =====
-  
+
   // Public method to notify all participants when meeting ends
   async notifyMeetingEnded(meetingId: string) {
     try {
@@ -1074,7 +1130,8 @@ export class SignalingGateway
 
   @SubscribeMessage('RAISE_HAND')
   async handleRaiseHand(
-    @MessageBody() data: { meetingId: string; userId: string; displayName: string },
+    @MessageBody()
+    data: { meetingId: string; userId: string; displayName: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
@@ -1101,7 +1158,7 @@ export class SignalingGateway
         userId,
         displayName,
         raisedAt: new Date(),
-        timeoutId
+        timeoutId,
       });
 
       // Broadcast to all participants in the meeting room
@@ -1109,19 +1166,19 @@ export class SignalingGateway
         userId,
         displayName,
         raisedAt: new Date(),
-        meetingId
+        meetingId,
       };
-      
+
       client.to(meetingId).emit('HAND_RAISED', broadcastData);
 
       // Also send to the person who raised their hand
       client.emit('HAND_RAISED', broadcastData);
-      
+
       // Also emit success event for the sender
       client.emit('HAND_RAISE_SUCCESS', {
         participantId: userId,
         userId: userId,
-        message: 'Hand raised successfully'
+        message: 'Hand raised successfully',
       });
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to raise hand' });
@@ -1130,7 +1187,14 @@ export class SignalingGateway
 
   @SubscribeMessage('LOWER_HAND')
   async handleLowerHand(
-    @MessageBody() data: { meetingId: string; participantId: string; userId?: string; displayName?: string; reason?: string },
+    @MessageBody()
+    data: {
+      meetingId: string;
+      participantId: string;
+      userId?: string;
+      displayName?: string;
+      reason?: string;
+    },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
@@ -1148,7 +1212,7 @@ export class SignalingGateway
 
       // Check if hand is raised - try both userId and participantId if they differ
       let handInfo = this.raisedHands.get(handKey);
-      
+
       // If not found with userId, try with participantId
       if (!handInfo && participantId && participantId !== userIdToUse) {
         const altKey = `${meetingId}:${participantId}`;
@@ -1159,13 +1223,13 @@ export class SignalingGateway
           this.raisedHands.set(handKey, handInfo);
         }
       }
-      
+
       if (!handInfo) {
         // Still emit success to allow UI to update - include both IDs
         client.emit('HAND_LOWER_SUCCESS', {
           participantId: userIdToUse,
           userId: userIdToUse,
-          message: 'Hand successfully lowered'
+          message: 'Hand successfully lowered',
         });
         return;
       }
@@ -1181,7 +1245,7 @@ export class SignalingGateway
         displayName: handInfo.displayName || displayName || 'Unknown',
         loweredAt: new Date(),
         meetingId,
-        reason
+        reason,
       });
 
       // Also emit to the sender
@@ -1191,14 +1255,14 @@ export class SignalingGateway
         displayName: handInfo.displayName || displayName || 'Unknown',
         loweredAt: new Date(),
         meetingId,
-        reason
+        reason,
       });
 
       // Emit success event - include both IDs for consistency
       client.emit('HAND_LOWER_SUCCESS', {
         participantId: userIdToUse,
         userId: userIdToUse,
-        message: 'Hand successfully lowered'
+        message: 'Hand successfully lowered',
       });
     } catch (error) {
       client.emit('HAND_LOWER_ERROR', { message: 'Failed to lower hand' });
@@ -1223,13 +1287,16 @@ export class SignalingGateway
           userId: handInfo.userId,
           displayName: handInfo.displayName,
           raisedAt: handInfo.raisedAt,
-          timeRemaining: Math.max(0, 60000 - (Date.now() - handInfo.raisedAt.getTime()))
+          timeRemaining: Math.max(
+            0,
+            60000 - (Date.now() - handInfo.raisedAt.getTime()),
+          ),
         }));
 
       client.emit('RAISED_HANDS_LIST', {
         meetingId,
         raisedHands,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to get raised hands' });
@@ -1237,21 +1304,25 @@ export class SignalingGateway
   }
 
   // Auto-lower hand after 1 minute
-  private autoLowerHand(meetingId: string, userId: string, displayName: string) {
+  private autoLowerHand(
+    meetingId: string,
+    userId: string,
+    displayName: string,
+  ) {
     const handKey = `${meetingId}:${userId}`;
     const handInfo = this.raisedHands.get(handKey);
-    
+
     if (handInfo) {
       // Remove from raised hands
       this.raisedHands.delete(handKey);
-      
+
       // Broadcast auto-lower to all participants
       this.server.to(meetingId).emit('HAND_AUTO_LOWERED', {
         userId,
         displayName,
         loweredAt: new Date(),
         meetingId,
-        reason: 'Auto-lowered after 1 minute'
+        reason: 'Auto-lowered after 1 minute',
       });
     }
   }
@@ -1262,14 +1333,14 @@ export class SignalingGateway
       if (handInfo.userId === userId) {
         clearTimeout(handInfo.timeoutId);
         this.raisedHands.delete(key);
-        
+
         const [meetingId] = key.split(':');
         this.server.to(meetingId).emit('HAND_AUTO_LOWERED', {
           userId,
           displayName: handInfo.displayName,
           loweredAt: new Date(),
           meetingId,
-          reason: 'User disconnected'
+          reason: 'User disconnected',
         });
       }
     }
@@ -1288,19 +1359,18 @@ export class SignalingGateway
     }
 
     const { meetingId } = data;
-    
+
     if (!meetingId) {
       client.emit('ERROR', { message: 'Meeting ID is required' });
       return;
     }
 
     try {
-
       // Update participant's lastSeenAt and socketId
       await this.participantService.updateParticipantPresence(
         client.user._id,
         meetingId,
-        client.id
+        client.id,
       );
 
       // Start heartbeat timeout for this participant
@@ -1310,7 +1380,7 @@ export class SignalingGateway
       client.emit('MEETING_JOIN_SUCCESS', {
         meetingId,
         userId: client.user._id,
-        message: 'Successfully joined meeting'
+        message: 'Successfully joined meeting',
       });
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to join meeting' });
@@ -1335,31 +1405,33 @@ export class SignalingGateway
         if (gracePeriod) {
           clearTimeout(gracePeriod.timeoutId);
           this.disconnectedUsers.delete(userId);
-          console.log(`[SignalingGateway] User ${userId} sending heartbeat while in grace period, canceling LEFT status`);
-          
+          console.log(
+            `[SignalingGateway] User ${userId} sending heartbeat while in grace period, canceling LEFT status`,
+          );
+
           // Notify that user is still active
           this.server.to(meetingId).emit('USER_RECONNECTED', {
             userId: userId,
             displayName: client.user.displayName,
             socketId: client.id,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           });
         }
       }
-      
+
       // Update database every 3rd heartbeat (30 seconds) to prevent cleanup conflicts
       const now = Date.now();
       const lastUpdate = this.lastHeartbeatUpdate.get(client.user._id) || 0;
-      const shouldUpdateDB = (now - lastUpdate) > 30880; // Update DB every 30 seconds (3 heartbeats at 10s intervals)
+      const shouldUpdateDB = now - lastUpdate > 30880; // Update DB every 30 seconds (3 heartbeats at 10s intervals)
 
       let dbUpdateSuccess = false;
-      
+
       if (shouldUpdateDB) {
         try {
           // Update participant's lastSeenAt timestamp in database
           await this.participantService.updateParticipantHeartbeat(
             client.user._id,
-            meetingId
+            meetingId,
           );
           this.lastHeartbeatUpdate.set(client.user._id, now);
           dbUpdateSuccess = true;
@@ -1376,21 +1448,21 @@ export class SignalingGateway
         client.emit('HEARTBEAT_ACK', {
           timestamp: new Date().toISOString(),
           meetingId,
-          dbUpdated: true
+          dbUpdated: true,
         });
       } else if (shouldUpdateDB && !dbUpdateSuccess) {
         client.emit('HEARTBEAT_ACK', {
           timestamp: new Date().toISOString(),
           meetingId,
           dbUpdated: false,
-          error: 'Database update failed'
+          error: 'Database update failed',
         });
       } else {
         // Lightweight ack without DB update
         client.emit('HEARTBEAT_ACK', {
           timestamp: new Date().toISOString(),
           meetingId,
-          dbUpdated: false
+          dbUpdated: false,
         });
       }
     } catch (error) {
@@ -1411,7 +1483,7 @@ export class SignalingGateway
         meetingId: data.meetingId,
         userId: client.user._id,
         text: data.message.trim(),
-        displayName: client.user.displayName
+        displayName: client.user.displayName,
       });
 
       // Broadcast to all participants in the meeting
@@ -1421,7 +1493,7 @@ export class SignalingGateway
         userId: client.user._id,
         displayName: client.user.displayName,
         message: data.message.trim(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       client.emit('CHAT_ERROR', { message: 'Failed to send message' });
@@ -1434,12 +1506,12 @@ export class SignalingGateway
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.user) return;
-    
+
     client.to(data.meetingId).emit('USER_TYPING', {
       userId: client.user._id,
       displayName: client.user.displayName,
       isTyping: true,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 
@@ -1449,12 +1521,12 @@ export class SignalingGateway
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.user) return;
-    
+
     client.to(data.meetingId).emit('USER_TYPING', {
       userId: client.user._id,
       displayName: client.user.displayName,
       isTyping: false,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 
@@ -1471,7 +1543,7 @@ export class SignalingGateway
       // Mark participant as LEFT
       await this.participantService.markParticipantAsLeftInMeeting(
         client.user._id,
-        meetingId
+        meetingId,
       );
 
       // Clean up heartbeat timeout
@@ -1485,7 +1557,7 @@ export class SignalingGateway
       client.emit('MEETING_LEAVE_SUCCESS', {
         meetingId,
         userId: client.user._id,
-        message: 'Successfully left meeting'
+        message: 'Successfully left meeting',
       });
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to leave meeting' });
@@ -1505,7 +1577,10 @@ export class SignalingGateway
       try {
         // IMPORTANT: mark as LEFT only for this specific meeting
         // This now properly closes active sessions to prevent ghost member attendance
-        await this.participantService.markParticipantAsLeftInMeeting(userId, meetingId);
+        await this.participantService.markParticipantAsLeftInMeeting(
+          userId,
+          meetingId,
+        );
 
         this.participantHeartbeats.delete(userId);
         this.lastHeartbeatUpdate.delete(userId);
@@ -1527,9 +1602,13 @@ export class SignalingGateway
     const { meetingId } = data;
 
     // Check if user is host (only hosts can start whiteboard)
-    const isHost = client.user.systemRole === SystemRole.ADMIN || client.user.systemRole === SystemRole.TUTOR;
+    const isHost =
+      client.user.systemRole === SystemRole.ADMIN ||
+      client.user.systemRole === SystemRole.TUTOR;
     if (!isHost) {
-      client.emit('ERROR', { message: 'Only the host can start the whiteboard' });
+      client.emit('ERROR', {
+        message: 'Only the host can start the whiteboard',
+      });
       return;
     }
 
@@ -1552,9 +1631,13 @@ export class SignalingGateway
     const { meetingId } = data;
 
     // Check if user is host (only hosts can stop whiteboard)
-    const isHost = client.user.systemRole === SystemRole.ADMIN || client.user.systemRole === SystemRole.TUTOR;
+    const isHost =
+      client.user.systemRole === SystemRole.ADMIN ||
+      client.user.systemRole === SystemRole.TUTOR;
     if (!isHost) {
-      client.emit('ERROR', { message: 'Only the host can stop the whiteboard' });
+      client.emit('ERROR', {
+        message: 'Only the host can stop the whiteboard',
+      });
       return;
     }
 
