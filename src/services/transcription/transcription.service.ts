@@ -274,7 +274,7 @@ export class TranscriptionService {
       const response = await this.axiosInstance.post(
         '/chat/completions',
         {
-          model: 'gpt-3.5-turbo', // Fastest and cheapest model for production speed
+          model: 'gpt-4o', // Higher accuracy for EN↔KO translation
           messages: [
             {
               role: 'system',
@@ -285,17 +285,17 @@ export class TranscriptionService {
               content: trimmedText,
             },
           ],
-          temperature: 0, // Zero temperature for fastest, most deterministic responses
-          max_tokens: Math.min(Math.ceil(trimmedText.length * 1.2), 250), // Optimized token limit for speed (translation usually shorter than original)
+          temperature: 0, // Zero temperature for deterministic outputs
+          max_tokens: Math.min(Math.ceil(trimmedText.length * 1.2), 250), // Optimized token limit (translation usually shorter than original)
           stream: false,
-          n: 1, // Single response
-          top_p: 1, // Default for speed
+          n: 1,
+          top_p: 1,
         },
         {
           headers: {
             'Content-Type': 'application/json',
           },
-          timeout: 1500, // 1.5 second timeout for faster failure handling in production
+          timeout: 1500, // Keep tight timeout; gpt-4o is still fast for short texts
         },
       );
 
@@ -629,6 +629,8 @@ export class TranscriptionService {
       /like and subscribe/i,
       /see you next time/i,
       /goodbye/i,
+      /^bye$/i, // Match standalone "bye" (common silence hallucination)
+      /^bye\s*\.*$/i, // Match "bye" with optional trailing punctuation
       /farewell/i,
       /end of transcript/i,
       /transcription/i,
@@ -665,11 +667,15 @@ export class TranscriptionService {
     }
 
     // Reject single-word transcriptions that are too short (likely noise)
-    if (wordCount === 1 && trimmed.length < 4) {
-      this.logger.debug(
-        `[Quality] Rejected - single short word (likely noise): "${trimmed}"`,
-      );
-      return false;
+    // Also reject common single-word farewells/greetings that are often hallucinations
+    const singleWordFarewells = ['bye', 'hi', 'hey', 'yes', 'no', 'ok', 'okay'];
+    if (wordCount === 1) {
+      if (trimmed.length < 4 || singleWordFarewells.includes(trimmed.toLowerCase())) {
+        this.logger.debug(
+          `[Quality] Rejected - single short word or farewell (likely noise/hallucination): "${trimmed}"`,
+        );
+        return false;
+      }
     }
 
     // Check for too many repeated characters (likely noise)
